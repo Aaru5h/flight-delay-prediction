@@ -1,0 +1,31 @@
+{
+  "config_version": "3.0.0",
+  "random_seed": 42,
+  "split_manifest_version": "1.0.0",
+  "logistic_regression": {
+    "C": 1.0,
+    "max_iter": 1000,
+    "solver": "saga",
+    "tol": 0.001,
+    "random_state": 42,
+    "class_weight": null
+  },
+  "xgboost_candidates": [
+    {
+      "n_estimators": 250,
+      "max_depth": 4,
+      "learning_rate": 0.08,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 5
+    },
+    {
+      "n_estimators": 350,
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "subsample": 0.9,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 5
+    }
+  ]
+}

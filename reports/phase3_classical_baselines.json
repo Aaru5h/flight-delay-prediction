@@ -1,0 +1,190 @@
+{
+  "phase": 3,
+  "run_id": "phase3-e4e2a5ce471a",
+  "generated_at": "2026-10-22T19:28:39+00:00",
+  "test_policy": "test labels not used for fitting, tuning, or Phase 3 metrics; Phase 5 owns final test evaluation",
+  "rows": {
+    "train": 217727,
+    "validation": 55628,
+    "test_sealed": 53991
+  },
+  "target_prevalence": {
+    "train": 0.26373853495432353,
+    "validation": 0.15695333285395843
+  },
+  "features": {
+    "count": 37,
+    "allowlist": [
+      "carrier",
+      "origin",
+      "dest",
+      "route",
+      "distance",
+      "sched_dep_hour",
+      "sched_day_of_week",
+      "sched_month",
+      "sched_day_of_year",
+      "sched_hour_sin",
+      "sched_hour_cos",
+      "sched_dow_sin",
+      "sched_dow_cos",
+      "scheduled_duration_minutes",
+      "origin_scheduled_hour_volume",
+      "origin_airport_lat",
+      "origin_airport_lon",
+      "origin_airport_alt",
+      "destination_airport_lat",
+      "destination_airport_lon",
+      "destination_airport_alt",
+      "temp",
+      "dewp",
+      "humid",
+      "wind_dir",
+      "wind_speed",
+      "wind_gust",
+      "precip",
+      "pressure",
+      "visib",
+      "weather_stale_or_missing",
+      "carrier_prior_count",
+      "carrier_delay_rate",
+      "carrier_history_missing",
+      "route_prior_count",
+      "route_delay_rate",
+      "route_history_missing"
+    ],
+    "categorical": [
+      "carrier",
+      "origin",
+      "dest",
+      "route"
+    ],
+    "numeric": [
+      "distance",
+      "sched_dep_hour",
+      "sched_day_of_week",
+      "sched_month",
+      "sched_day_of_year",
+      "sched_hour_sin",
+      "sched_hour_cos",
+      "sched_dow_sin",
+      "sched_dow_cos",
+      "scheduled_duration_minutes",
+      "origin_scheduled_hour_volume",
+      "origin_airport_lat",
+      "origin_airport_lon",
+      "origin_airport_alt",
+      "destination_airport_lat",
+      "destination_airport_lon",
+      "destination_airport_alt",
+      "temp",
+      "dewp",
+      "humid",
+      "wind_dir",
+      "wind_speed",
+      "wind_gust",
+      "precip",
+      "pressure",
+      "visib",
+      "weather_stale_or_missing",
+      "carrier_prior_count",
+      "carrier_delay_rate",
+      "carrier_history_missing",
+      "route_prior_count",
+      "route_delay_rate",
+      "route_history_missing"
+    ]
+  },
+  "versions": {
+    "python": "3.13.6",
+    "pandas": "2.3.3",
+    "scikit_learn": "1.9.1",
+    "xgboost": "3.4.1"
+  },
+  "random_seed": 42,
+  "feature_manifest_version": "2.0.0",
+  "feature_manifest_sha256": "128b495da34cd52ecf14f83ddaa497e18b64999e11a87b5f020584aefac51d00",
+  "feature_table_sha256": "7b9b7633beaedf8f6631c49dedfdc85be087bc90515c3d580d592a23ac603edd",
+  "split_manifest_version": "1.0.0",
+  "split_contract": {
+    "type": "chronological",
+    "timezone_assumption": "scheduled date/time fields are local America/New_York time",
+    "boundaries": {
+      "train": "through 2013-08-31",
+      "validation": "2013-09-01 to 2013-10-31",
+      "test": "2013-11-01 to 2013-12-31"
+    },
+    "status": "frozen_for_model_comparison",
+    "evidence": "reports/phase0_split_profile.csv",
+    "distribution_shift_note": "Labelled positive prevalence is 26.4% (train), 15.7% (validation) and 25.8% (test); September (13.7%) and December (33.5%) are the seasonal trough/peak. Boundaries were kept as proposed because changing them to balance prevalence would be outcome-driven; the shift must be disclosed in every evaluation report and prevalence reported alongside all metrics.\n",
+    "change_policy": "Any boundary change must be documented with rationale in this file before model comparison begins, and never after viewing final test results.\n"
+  },
+  "code_commit": "246e9d6812bd7790bbfc526e734040af909022ee",
+  "models": {
+    "logistic_regression": {
+      "settings": {
+        "C": 1.0,
+        "max_iter": 1000,
+        "solver": "saga",
+        "tol": 0.001,
+        "random_state": 42,
+        "class_weight": null
+      },
+      "validation_metrics": {
+        "pr_auc": 0.3188634089414798,
+        "roc_auc": 0.6815184272499235,
+        "brier_score": 0.13328706046608418
+      }
+    },
+    "xgboost": {
+      "selected_settings": {
+        "n_estimators": 350,
+        "max_depth": 6,
+        "learning_rate": 0.05,
+        "subsample": 0.9,
+        "colsample_bytree": 0.9,
+        "min_child_weight": 5
+      },
+      "selection_metric": "validation PR AUC",
+      "validation_metrics": {
+        "pr_auc": 0.29450617103022136,
+        "roc_auc": 0.6744518146290504,
+        "brier_score": 0.12467139959335327
+      },
+      "trials": [
+        {
+          "candidate": 1,
+          "settings": {
+            "n_estimators": 250,
+            "max_depth": 4,
+            "learning_rate": 0.08,
+            "subsample": 0.9,
+            "colsample_bytree": 0.9,
+            "min_child_weight": 5
+          },
+          "validation_metrics": {
+            "pr_auc": 0.2921401152599052,
+            "roc_auc": 0.6649052389188513,
+            "brier_score": 0.12504497170448303
+          }
+        },
+        {
+          "candidate": 2,
+          "settings": {
+            "n_estimators": 350,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "subsample": 0.9,
+            "colsample_bytree": 0.9,
+            "min_child_weight": 5
+          },
+          "validation_metrics": {
+            "pr_auc": 0.29450617103022136,
+            "roc_auc": 0.6744518146290504,
+            "brier_score": 0.12467139959335327
+          }
+        }
+      ]
+    }
+  }
+}
