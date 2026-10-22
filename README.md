@@ -148,6 +148,20 @@ under `reports/`. The measured quality report for the supplied files is
 
 The raw input directory should contain the five supplied CSV files listed above. Before training models, run the data profile and label audit and review their counts. Do not treat the reference numbers in this README as values to hard-code into code; they are validation expectations for the supplied version of the files.
 
+### Feature engineering (Phase 2)
+
+Build the leakage-safe T−60 feature table after Phase 1:
+
+```bash
+python -m src.features.pipeline
+```
+
+This writes `data/processed/phase2_features.csv`, the versioned manifest at
+`data/processed/phase2_feature_manifest.json`, and measured coverage at
+`reports/phase2_feature_quality.json`. Only the manifest allowlist enters the
+estimator; identifiers, target, cutoff, weather timestamp, and weather age are
+audit fields outside `X`.
+
 ## 12. Project documentation
 
 - [Product Requirements Document](docs/Product/PRD.md)

@@ -177,5 +177,8 @@ open_assumptions:
       flights.time_hour values (e.g. 2013-01-01T10:00:00Z for a 05:15 local
       departure) and weather.time_hour appear to be UTC with local time =
       UTC-5 (EST). Weather rows are stamped on the hour.
-    status: to_verify_in_phase_2_before_weather_join
-    action_if_unresolved: block the weather as-of join rather than guess silently
+    status: resolved_in_phase_2
+    resolution: >
+      Verified against raw flight and weather rows. Both time_hour fields are
+      UTC timestamps representing America/New_York local schedule/observation
+      hours; Phase 2 localizes scheduled timestamps before UTC comparison.
