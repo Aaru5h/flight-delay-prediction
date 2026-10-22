@@ -1,0 +1,21 @@
+{
+  "phase": 1,
+  "generated_at": "2026-10-22T14:37:52+00:00",
+  "command": "python -m src.data.prepare",
+  "python_version": "3.13.6",
+  "pandas_version": "2.3.3",
+  "code_commit": "7d2b220226a38384a8e8b090ac9096b78c261f2b",
+  "raw_dir": "/Users/Deepak/Desktop/flight-delay-prediction/data/raw",
+  "source_fingerprints": {
+    "flights": "563db8f117faf6ffd76aa868099df37dfa78dc17b5ac6d3d9ea6476e051a0bc4",
+    "airlines": "162551bd3401a12d63db3d92b7e66af3017d2e40d55919d6a678489323c10609",
+    "airports": "d3b9145e764bc18aeab0f99afdf6fa4ecd7f246d768ca1b5c6dabc0e463aac2b",
+    "planes": "778962edec8339f6f6edb1d6506869f61cab573eda03d7e162d2899c76d04c1a",
+    "weather": "e70e506bdf32170c3f7d7c5914d77f268b3399f922d2860f09556eaac30fe73b"
+  },
+  "outputs": {
+    "labelled_flights": "/Users/Deepak/Desktop/flight-delay-prediction/data/processed/labelled_flights.csv",
+    "labelled_rows": 336776,
+    "labelled_columns": 23
+  }
+}
