@@ -1,148 +1,144 @@
 # Flight Delay Prediction and Rescheduling
 
 **Project title:** Flight Delay Prediction via Gradient Boosting and Temporal Deep Learning  
-**Project type:** Offline machine-learning research pipeline  
-**Data:** NYC-origin flights and related reference/weather tables for calendar year 2013  
-**Target:** Arrival delay of at least 15 minutes  
-**Team:** Five contributors with explicit end-to-end ownership
+**Project type:** Applied machine-learning project and offline what-if analysis  
+**Dataset:** NYC-origin flight records and associated airline, airport, aircraft, and weather CSV files for 2013  
+**Primary task:** Predict whether a flight will arrive at least 15 minutes late, using information available before departure
 
-## 1. Project overview
+---
 
-This project predicts whether a scheduled flight departing from New York City's three major airports—EWR, JFK, or LGA—will arrive at least 15 minutes late. It uses the supplied historical flight, airline, airport, aircraft, and hourly weather CSV files. The modeling comparison covers a Logistic Regression baseline, XGBoost, and a compact neural network with learned categorical embeddings. A sequence/temporal model is an additional experiment only if it can be evaluated with defensible time ordering and without future-information leakage.
+## 1. Overview
 
-After choosing a model using validation data, the team will perform an **offline rescheduling what-if analysis**. It compares predicted risk for a set of hypothetical schedule shifts under explicit constraints. It is not a causal estimate, operational flight plan, or claim that moving a real flight will reduce delays.
+Flight delays create uncertainty for passengers, airlines, airport operations, and connecting services. This project builds and compares machine-learning models that estimate whether a scheduled flight departing from one of New York City's three major airports—Newark Liberty (EWR), John F. Kennedy (JFK), or LaGuardia (LGA)—will arrive substantially late.
 
-The project is a research and local-execution pipeline. It is not a production API, web app, desktop app, airline operations system, or live prediction service.
+The project uses scheduled flight information, airline and route identifiers, calendar information, aircraft reference data where its availability can be justified, weather observations available before the prediction cutoff, and historical delay patterns constructed strictly from earlier flights. The models to compare are Logistic Regression, XGBoost, and a compact neural network with learned categorical embeddings. A temporal model is optional and will only be attempted if the ordering and availability of its history can be established correctly.
 
-## 2. The actual supplied data
+The final analytical component is an offline rescheduling what-if analysis. It compares predicted delay risk for explicitly defined alternative scheduled departure times. It is a sensitivity analysis, not a causal estimate and not a real-world dispatch recommendation.
 
-These file profiles are measured from the five CSVs supplied with the project. The pipeline must recheck them each time it runs; these are expected reference counts, not permission to hard-code row counts.
+## 2. Problem statement
 
-| File | Rows | Columns | Meaning |
+The task is to estimate substantial-arrival-delay risk before departure. A model is not useful if it obtains attractive scores by using information that only becomes available after the flight departs or arrives. The project therefore treats prediction-time data availability and chronological evaluation as core correctness requirements, not optional refinements.
+
+## 3. Dataset supplied with the project
+
+The project currently includes five CSV files. The following profile was measured from the supplied files; the data pipeline should recheck schemas and counts whenever it runs.
+
+| File | Rows | Columns | Purpose |
 |---|---:|---:|---|
-| `nyc_flights.csv` | 336,776 | 19 | Scheduled flights from EWR, JFK, and LGA in 2013, including actual outcomes where present |
-| `nyc_airlines.csv` | 16 | 2 | Carrier-code lookup |
-| `nyc_airports.csv` | 1,458 | 8 | Airport reference attributes |
-| `nyc_planes.csv` | 3,322 | 9 | Aircraft reference attributes by tail number |
-| `nyc_weather.csv` | 26,115 | 15 | Hourly weather observations for the three origin airports |
+| `nyc_flights.csv` | 336,776 | 19 | Flight schedule, route, carrier, and observed outcomes for 2013 |
+| `nyc_airlines.csv` | 16 | 2 | Carrier-code to airline-name lookup |
+| `nyc_airports.csv` | 1,458 | 8 | Airport names, locations, and reference attributes |
+| `nyc_planes.csv` | 3,322 | 9 | Aircraft reference attributes keyed by tail number |
+| `nyc_weather.csv` | 26,115 | 15 | Hourly weather observations at EWR, JFK, and LGA |
 
-The flight dates cover 2013-01-01 through 2013-12-31. Of the 336,776 flight records, 327,346 have a non-missing `arr_delay` and can be labelled. The remaining 9,430 have no valid arrival-delay label and must be excluded from supervised classification while their reasons are reported. Among labelled records, 80,100 are positive (`arr_delay >= 15`, 24.47%) and 247,246 are negative (75.53%).
+The flight records cover 1 January through 31 December 2013. `arr_delay` is present for 327,346 records and missing for 9,430. Of the records with a valid arrival delay, 80,100 meet the target threshold of at least 15 minutes (24.47%) and 247,246 do not (75.53%). Missing arrival delay must not be silently converted to zero.
 
-**Do not call all 9,430 rows cancelled flights.** The supplied flight CSV has no explicit cancellation or diversion flag. There are 8,255 rows with both `dep_time` and `arr_delay` missing, and another 1,175 with `arr_delay` missing despite a non-missing `dep_time`. Report observable facts rather than assigning unsupported reasons.
+The source files do not contain an explicit cancellation or diversion flag. Missing arrival-delay records must therefore be reported as unlabeled records; they must not all be described as confirmed cancellations. The airport reference file does not cover four destination codes present in the flights file (`BQN`, `PSE`, `SJU`, and `STT`), and aircraft lookup coverage is incomplete. These are known join limitations to preserve in data-quality reporting.
 
-See [Dataset Reference](docs/Data/Dataset-Reference.md) and [Data Dictionary](docs/Data/Data-Dictionary.md) for the full profile, missingness, joins and fields.
+For field-level definitions and join considerations, see [Research](docs/Research/Research.md), [Data/Entity Relationships](docs/Architecture%20Diagrams/ER-Diagram.md), and [Product Requirements](docs/Product/PRD.md).
 
-## 3. Prediction and evaluation contract
+## 4. Target definition
 
-- **Decision point:** 60 minutes before scheduled departure (`T−60`). Contributors must use this same cutoff in features, model comparisons and the what-if analysis.
-- **Label:** `substantial_delay = 1` when observed `arr_delay >= 15` minutes; otherwise `0`. Negative delay values and delays below 15 minutes are class `0`.
-- **No label leakage:** actual `arr_delay` is used to construct `y` only. Actual `dep_time`, `dep_delay`, `arr_time`, `air_time`, and other post-decision outcomes cannot be model inputs.
-- **Weather availability:** use the most recent origin-airport weather observation whose timestamp is no later than `T−60`; mark it missing if it is more than three hours older than the cutoff. The same-hour schedule join is useful for data profiling, but is not itself valid at `T−60`.
-- **Historical outcomes:** delay aggregates must use completed prior calendar dates only; never use the target flight or same-day outcomes to construct historical features.
-- **Split:** train on dates through 2013-08-31, validate on 2013-09-01–2013-10-31, and test on 2013-11-01–2013-12-31. Contributor 5 owns the frozen split manifest and must publish counts before model comparisons.
-- **Test discipline:** threshold choice, hyperparameter tuning, calibration selection and model selection use training/validation data only. Test data is evaluated after decisions are locked.
+For each flight with a known `arr_delay`:
 
-The proposed split has a notable target-rate shift: the labelled training portion has 57,423 positives of 217,727 rows (26.37%); validation has 8,731 of 55,628 (15.70%); test has 13,946 of 53,991 (25.83%). This must be discussed rather than hidden. These figures describe the dataset split, not model performance.
+- `substantial_delay = 1` when `arr_delay >= 15` minutes.
+- `substantial_delay = 0` when `arr_delay < 15` minutes, including early arrivals and small delays.
+- Flights with missing `arr_delay` are excluded from supervised classification and counted in the data-quality report.
 
-## 4. Five-contributor ownership
+The actual `arr_delay` is used to create the target only. It must never be included among model inputs.
 
-| Contributor | Primary ownership | Main deliverables |
+## 5. Prediction-time contract
+
+The baseline project design uses a prediction cutoff of **60 minutes before the scheduled departure time (T−60)**. Every model must use features that would be available by that cutoff. If the team later changes this decision time, the feature policy, evaluation protocol, and rescheduling analysis must all be updated together.
+
+The following rules apply:
+
+- Scheduled time, calendar, carrier, origin, and destination fields may be considered when their availability at T−60 is established.
+- Actual departure time, departure delay, actual arrival time, arrival delay, and air time are post-departure outcomes and cannot be model inputs.
+- Use the latest origin-airport weather observation timestamped no later than T−60. For the initial design, reject an observation if it is more than three hours older than the cutoff. Historical observations are not weather forecasts; that limitation must be acknowledged.
+- Historical delay/congestion features may use only flights from dates strictly before the target flight's date. Same-day outcomes and the target flight itself are excluded.
+- Treat `tailnum` as unavailable unless the team can justify that the assigned aircraft was known at T−60. Do not use it merely because it appears in the CSV.
+
+## 6. Models and evaluation
+
+The project compares:
+
+1. **Logistic Regression** as the interpretable baseline.
+2. **XGBoost** as the boosted-tree model for nonlinear relationships and feature interactions.
+3. **Compact embedding MLP** using learned representations for airline, origin, and destination categories alongside numeric features.
+4. **Optional temporal model**, only when records can be ordered and the history is constructed without future information.
+
+Models must use the same chronological train/validation/test design and the same prediction-time rules. Report PR AUC, ROC AUC, recall at a precision threshold selected on validation data, and calibration diagnostics. Test results must not be used to tune the model or choose the operating threshold.
+
+## 7. Offline rescheduling analysis
+
+The rescheduling analysis evaluates candidate schedule shifts under declared assumptions. It may compare predicted risks for shifts such as −60, −30, −15, +15, +30, and +60 minutes, subject to reasonable operating-hour bounds. Time-derived features must be recalculated consistently for each candidate schedule.
+
+The analysis does not establish that rescheduling will cause an actual reduction in delays. The supplied data does not model the full operational constraints of crews, aircraft rotations, gates, airport capacity, passenger connections, or network-wide knock-on effects. Any output must be described as model-based risk comparison, not an operationally validated schedule.
+
+## 8. Team responsibilities
+
+| Contributor | Primary responsibility | Main output |
 |---|---|---|
-| **1 — Data pipeline and label** | Loading the five source files, schema/data-quality checks, target creation and exclusion audit | Reproducible labelled dataset, data profile, column guide, preparation tests |
-| **2 — Feature engineering** | Schedule/calendar features, reference joins, safe weather as-of join, lagged historical features and leakage audit | Versioned feature matrix, feature manifest and feature tests |
-| **3 — Classical ML** | Logistic Regression and XGBoost baselines using the shared features and split | Both trained pipelines, validation/test prediction artifacts, configs and model notes |
-| **4 — Deep learning** | MLP with airline/origin/destination embeddings; optional temporal experiment if justified | Neural model, training code/config, predictions, model card and comparison notes |
-| **5 — Evaluation and rescheduling** | Shared chronological split contract, common metrics, calibration/threshold analysis, fair comparison, what-if rescheduling and final report integration | Frozen split manifest, evaluation package, selected-model rationale, rescheduling report and reproduction checklist |
+| **1 — Data preparation** | Load and profile the five CSVs, clean data, define the delay label, audit exclusions and data quality | Reproducible labelled dataset and data-quality summary |
+| **2 — Feature engineering** | Build schedule, calendar, route, safe weather, and lagged historical features; enforce feature availability | Versioned feature matrix and feature definitions |
+| **3 — Classical models** | Implement and tune Logistic Regression and XGBoost | Reproducible classical baselines and predictions |
+| **4 — Deep learning** | Implement the categorical-embedding MLP; evaluate whether a temporal model is justified | Neural-model code, configuration, and predictions |
+| **5 — Evaluation and rescheduling** | Own the chronological split, metrics, threshold/calibration analysis, common comparison, offline rescheduling, and final report integration | Evaluation results and rescheduling report |
 
-Contributor 5 owns the evaluation infrastructure but does **not** rewrite the other contributors' models. Contributors 3 and 4 each provide predictions in the agreed common format. Contributor 2 owns feature calculations; Contributor 5 audits their cutoff compliance. Contributor 1 owns target data quality but does not create model features. See [Team Ownership](docs/Team-Ownership.md).
+Contributors own their components; shared interfaces and data contracts must be agreed before integration. Contributor 5 owns common evaluation and rescheduling, not the implementation of everyone else's models.
 
-## 5. Recommended repository layout
+## 9. Technology stack
+
+The proposed stack is Python, pandas (or Polars if the team deliberately standardizes on it), scikit-learn, XGBoost, PyTorch, and matplotlib. The project is an offline analysis pipeline. A web service, database-backed application, desktop application, or live airline operations integration is not part of the current scope.
+
+## 10. Initial repository layout
 
 ```text
 .
 ├── README.md
 ├── data/
-│   ├── raw/                       # supplied CSVs; read-only inputs
-│   └── processed/                 # generated labelled/features data
-├── configs/                       # split, features and model configs
+│   ├── raw/                 # original CSV files; never edit in place
+│   └── processed/           # generated labelled data and feature matrices
 ├── src/
-│   ├── data/                      # Contributor 1
-│   ├── features/                  # Contributor 2
+│   ├── data/                # loading, profiling, preparation, labels
+│   ├── features/            # prediction-time-safe feature creation
 │   ├── models/
-│   │   ├── classical/             # Contributor 3
-│   │   └── neural/                # Contributor 4
-│   ├── evaluation/                # Contributor 5
-│   └── rescheduling/              # Contributor 5
-├── tests/
-├── artifacts/                     # generated model artifacts; usually gitignored
-├── reports/                       # quality reports, metrics and figures
+│   │   ├── classical/       # Logistic Regression and XGBoost
+│   │   └── neural/          # embedding MLP and optional temporal model
+│   ├── evaluation/          # chronological splits, metrics, calibration
+│   └── rescheduling/        # offline what-if analysis
+├── tests/                   # data, feature, and model-contract checks
+├── reports/                 # quality summaries, figures, evaluation results
+├── artifacts/               # generated model artifacts; normally gitignored
 └── docs/
     ├── Architecture Diagrams/
-    ├── Data/
-    ├── Models/
     ├── Product/
     └── Research/
 ```
 
-This is the agreed logical layout. OpenCode must inspect the actual repository before creating files. If equivalent modules already exist, extend them instead of building duplicate implementations.
+This is the intended logical organization, not a claim that every directory or script already exists. Preserve the five raw CSV files and exclude large generated artifacts from version control unless the team has a deliberate reason to track them.
 
-## 6. Setup and local execution
+## 11. Getting started
 
-Use the Python version already established in the repository. If no version is specified, the team should standardize on Python 3.11 and record it. Use one canonical dependency definition (`requirements.txt` or `pyproject.toml`). Do not create both without a deliberate reason.
+Use the Python version selected by the team and recorded in the repository. If no version has been agreed, Python 3.11 is a reasonable starting point. Create and activate a virtual environment before installing the project dependencies. Keep one canonical dependency file (`requirements.txt` or `pyproject.toml`) once the implementation begins.
 
-```bash
-python -m venv .venv
-# macOS/Linux
-source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-```
+The raw input directory should contain the five supplied CSV files listed above. Before training models, run the data profile and label audit and review their counts. Do not treat the reference numbers in this README as values to hard-code into code; they are validation expectations for the supplied version of the files.
 
-After dependencies are established, the expected workflow is:
+## 12. Project documentation
 
-```bash
-# Proposed entry points; update these after implementation if the repo uses different commands.
-python -m src.data.profile --data-dir data/raw --out reports/data_quality_summary.json
-python -m src.data.prepare --data-dir data/raw --out data/processed/flights_labeled.parquet
-python -m src.features.build --config configs/features.yaml
-python -m src.evaluation.run --config configs/evaluation.yaml
-python -m src.rescheduling.run --config configs/rescheduling.yaml
-```
+- [Product Requirements Document](docs/Product/PRD.md)
+- [Project and Modeling Design](docs/Product/Design.md)
+- [Research and Dataset Notes](docs/Research/Research.md)
+- [Use Case Diagram](docs/Architecture%20Diagrams/Use-Case-Diagram.md)
+- [Entity Relationship Diagram](docs/Architecture%20Diagrams/ER-Diagram.md)
+- [UML Class Diagram](docs/Architecture%20Diagrams/UML-Class-Diagram.md)
 
-Do not claim these commands exist until the corresponding scripts have been implemented and tested. Never edit raw data in place. Do not hard-code the reference row counts into the pipeline as runtime assumptions.
+## 13. Current limitations
 
-## 7. Core deliverables
-
-1. Data-quality report and reproducible labelled dataset.
-2. Leakage-safe feature matrix and feature-availability manifest.
-3. Logistic Regression, XGBoost and neural MLP model runs with saved configurations.
-4. A fair chronological comparison reporting PR AUC, ROC AUC, recall at a preselected operational precision requirement, and calibration diagnostics.
-5. An offline rescheduling what-if report with candidate-shift assumptions and non-causal limitations.
-6. A final technical report, diagrams, model card and instructions to reproduce the results.
-
-## 8. Documentation map
-
-- [Product requirements](docs/Product/PRD.md)
-- [Product/report design](docs/Product/Design.md)
-- [Research](docs/Research/Research.md)
-- [Team ownership and handoffs](docs/Team-Ownership.md)
-- [Data profile](docs/Data/Dataset-Reference.md)
-- [Data dictionary](docs/Data/Data-Dictionary.md)
-- [Preparation and target contract](docs/Data/Data-Preparation.md)
-- [Feature availability and leakage controls](docs/Data/Feature-Availability.md)
-- [Data-quality report template](docs/Data/Data-Quality-Report.md)
-- [Modeling and evaluation](docs/Models/Modeling-and-Evaluation.md)
-- [Model card](docs/Models/Model-Card.md)
-- [Rescheduling analysis](docs/Models/Rescheduling-Analysis.md)
-- [Implementation phases](docs/Implementation-Phases.md)
-- [OpenCode prompts](docs/OpenCode-Phase-Prompts.md)
-- [Testing and security](docs/Testing-and-Security.md)
-- [Module and CLI conventions](docs/API-Conventions.md)
-- [Reproducibility and handoff](docs/Deployment-and-Launch.md)
-- [Architecture diagrams index](docs/Architecture%20Diagrams/README.md)
-
-## 9. Sources and provenance
-
-The supplied schema and values match the `nycflights13` family of data. The package documentation describes flights departing EWR, JFK and LGA in 2013 and gives source-column definitions: [flights documentation](https://nycflights13.tidyverse.org/reference/flights.html), [weather documentation](https://nycflights13.tidyverse.org/reference/weather.html), and [package repository](https://github.com/tidyverse/nycflights13). The 15-minute arrival threshold is consistent with the on-time definition used in US aviation reporting; see [BTS Airline On-Time Performance](https://www.bts.gov/explore-topics-and-geography/topics/airline-time-performance-and-causes-flight-delays). Calibration background: Guo et al., [On Calibration of Modern Neural Networks](https://proceedings.mlr.press/v70/guo17a.html).
-
-The dataset package is distributed as CC0/public-domain data, but record the actual source/version used. The project code still needs an explicit repository license decision.
+- The dataset covers one calendar year and flights departing from three NYC-area airports; generalization to other years, airports, or airlines is not established.
+- The target is observed arrival delay, not cancellation risk or departure-delay risk.
+- Missing arrival delay is not a negative label.
+- Weather data consists of historical observations, not forecast products.
+- Some destination airport and aircraft references do not match the provided lookup files.
+- Offline rescheduling results are not causal or operationally validated.
