@@ -51,7 +51,7 @@ def write_synthetic_sources(raw_dir: Path) -> None:
              origin="JFK", dest="BQN", distance=1570, hour=7, minute=0,
              time_hour="2013-03-03T12:00:00Z"),
         # early arrival, negative delay
-        dict(year=2013, month=3, day=3, sched_dep_time=190, sched_arr_time=2250,
+        dict(year=2013, month=3, day=3, sched_dep_time=130, sched_arr_time=2250,
              arr_delay=-7.0, carrier="AA", flight=2, tailnum="N1AA",
              origin="EWR", dest="STT", distance=1634, hour=1, minute=30,
              time_hour="2013-03-03T06:00:00Z"),
