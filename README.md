@@ -131,6 +131,21 @@ python -m pip install -r requirements.txt
 python -m pytest          # baseline contract tests must pass
 ```
 
+### Data preparation (Phase 1)
+
+Regenerate the labelled dataset and data-quality report from the raw CSVs:
+
+```bash
+python -m src.data.prepare
+```
+
+Outputs: `data/processed/labelled_flights.csv` (one row per source flight with
+`flight_row_id`, parsed schedule fields, the label and `label_status`;
+`arr_delay` is kept for audit only), `data/processed/phase1_run_manifest.json`
+(source fingerprints and code commit), and the JSON/Markdown quality report
+under `reports/`. The measured quality report for the supplied files is
+[reports/phase1_data_quality.md](reports/phase1_data_quality.md).
+
 The raw input directory should contain the five supplied CSV files listed above. Before training models, run the data profile and label audit and review their counts. Do not treat the reference numbers in this README as values to hard-code into code; they are validation expectations for the supplied version of the files.
 
 ## 12. Project documentation
