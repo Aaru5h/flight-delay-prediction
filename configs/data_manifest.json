@@ -1,0 +1,103 @@
+{
+  "purpose": "Phase 0 source-data manifest; verify raw inputs are unchanged before any run",
+  "files": [
+    {
+      "file": "nyc_flights.csv",
+      "size_bytes": 31053850,
+      "sha256": "563db8f117faf6ffd76aa868099df37dfa78dc17b5ac6d3d9ea6476e051a0bc4",
+      "rows": 336776,
+      "columns": 19,
+      "header": [
+        "year",
+        "month",
+        "day",
+        "dep_time",
+        "sched_dep_time",
+        "dep_delay",
+        "arr_time",
+        "sched_arr_time",
+        "arr_delay",
+        "carrier",
+        "flight",
+        "tailnum",
+        "origin",
+        "dest",
+        "air_time",
+        "distance",
+        "hour",
+        "minute",
+        "time_hour"
+      ]
+    },
+    {
+      "file": "nyc_airlines.csv",
+      "size_bytes": 386,
+      "sha256": "162551bd3401a12d63db3d92b7e66af3017d2e40d55919d6a678489323c10609",
+      "rows": 16,
+      "columns": 2,
+      "header": [
+        "carrier",
+        "name"
+      ]
+    },
+    {
+      "file": "nyc_airports.csv",
+      "size_bytes": 104302,
+      "sha256": "d3b9145e764bc18aeab0f99afdf6fa4ecd7f246d768ca1b5c6dabc0e463aac2b",
+      "rows": 1458,
+      "columns": 8,
+      "header": [
+        "faa",
+        "name",
+        "lat",
+        "lon",
+        "alt",
+        "tz",
+        "dst",
+        "tzone"
+      ]
+    },
+    {
+      "file": "nyc_planes.csv",
+      "size_bytes": 247198,
+      "sha256": "778962edec8339f6f6edb1d6506869f61cab573eda03d7e162d2899c76d04c1a",
+      "rows": 3322,
+      "columns": 9,
+      "header": [
+        "tailnum",
+        "year",
+        "type",
+        "manufacturer",
+        "model",
+        "engines",
+        "seats",
+        "speed",
+        "engine"
+      ]
+    },
+    {
+      "file": "nyc_weather.csv",
+      "size_bytes": 2294220,
+      "sha256": "e70e506bdf32170c3f7d7c5914d77f268b3399f922d2860f09556eaac30fe73b",
+      "rows": 26115,
+      "columns": 15,
+      "header": [
+        "origin",
+        "year",
+        "month",
+        "day",
+        "hour",
+        "temp",
+        "dewp",
+        "humid",
+        "wind_dir",
+        "wind_speed",
+        "wind_gust",
+        "precip",
+        "pressure",
+        "visib",
+        "time_hour"
+      ]
+    }
+  ]
+}

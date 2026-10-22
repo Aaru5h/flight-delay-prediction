@@ -1,0 +1,11 @@
+# Canonical dependency file for flight-delay-prediction (Phase 0 decision).
+# Do not maintain a second dependency file (no pyproject.toml) without a reviewed change.
+# Python 3.13 is the agreed interpreter (see configs/project_contract.yaml).
+pandas>=2.1,<3
+numpy>=1.26,<3
+scikit-learn>=1.4,<2
+xgboost>=2.0,<4
+torch>=2.2
+matplotlib>=3.8
+pyyaml>=6.0
+pytest>=8.0

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Generated data and model artifacts (regenerable; see README for commands)
+data/processed/
+artifacts/
+
+# Local tooling
+.DS_Store

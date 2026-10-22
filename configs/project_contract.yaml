@@ -1,0 +1,181 @@
+# =============================================================================
+# Project Contract — flight-delay-prediction
+# =============================================================================
+# This is the canonical Phase 0 contract agreed by all contributors. It freezes
+# the target definition, prediction-time rules, chronological split, metric
+# policy and artifact schemas. Any change requires a reviewed, documented
+# update to this file BEFORE the affected pipeline stages are run. Never change
+# a value here in response to final test results.
+#
+# Human-readable context: README.md, docs/Engineering/Implementation-Phases.md,
+# docs/Engineering/implementation-phase-0-plan.md.
+# =============================================================================
+
+contract_version: "1.0.0"
+phase_frozen: 0
+
+environment:
+  python_version: "3.13"          # agreed minimum; dev machine verified 3.13.6
+  python_version_note: >
+    The Phase 0 plan suggested 3.11 as a candidate; 3.11/3.12 are not installed
+    on the development machine, so 3.13 (fully supported by pandas, scikit-learn,
+    xgboost and torch) was agreed instead.
+  dependency_file: requirements.txt   # single canonical dependency file
+  test_command: "python -m pytest"
+
+data:
+  raw_directory: data/raw         # read-only; never edit in place
+  manifest: configs/data_manifest.json
+  files:
+    - nyc_flights.csv
+    - nyc_airlines.csv
+    - nyc_airports.csv
+    - nyc_planes.csv
+    - nyc_weather.csv
+  reference_profile:              # validation expectations for the SUPPLIED
+                                  # files, measured 2026-10-22; recompute at
+                                  # runtime, never hard-code into pipeline code
+    flights_rows: 336776
+    known_labels: 327346
+    positive: 80100
+    negative: 247246
+    unknown_labels: 9430
+    positive_prevalence: 0.2447
+
+target:
+  name: substantial_delay
+  source_column: arr_delay
+  rule: "substantial_delay = 1 if arr_delay >= 15 else 0 when arr_delay is known"
+  threshold_minutes: 15
+  missing_policy: unknown_label_excluded
+  missing_policy_detail: >
+    Rows with missing arr_delay have an unknown target. They are excluded from
+    supervised training, validation and test populations, counted in the
+    data-quality report, and must never be zero-filled or described as
+    confirmed cancellations (the source has no cancellation/diversion flag).
+  usage: target_construction_and_audit_only
+
+prediction_time:
+  cutoff_minutes_before_scheduled_departure: 60
+  label: "T-60"
+  prohibited_features: [dep_time, dep_delay, arr_time, arr_delay, air_time]
+  conditional_features:
+    tailnum:
+      status: excluded
+      condition: >
+        Excluded unless the team documents evidence that the aircraft
+        assignment was known at T-60; approval requires a reviewed contract
+        change.
+  weather:
+    join_rule: latest origin-airport observation with time_hour <= cutoff
+    max_age_minutes: 180
+    stale_policy: mark weather inputs missing and record coverage
+    caveat: historical observations, not forecast vintages
+  historical_features:
+    window: calendar dates strictly earlier than the target flight's date
+    same_day_or_later: prohibited
+    fallback: missing indicator or documented prior; never an unexamined zero
+
+split:
+  type: chronological
+  timezone_assumption: scheduled date/time fields are local America/New_York time
+  boundaries:
+    train: "through 2013-08-31"
+    validation: "2013-09-01 to 2013-10-31"
+    test: "2013-11-01 to 2013-12-31"
+  status: frozen_for_model_comparison
+  evidence: reports/phase0_split_profile.csv
+  distribution_shift_note: >
+    Labelled positive prevalence is 26.4% (train), 15.7% (validation) and
+    25.8% (test); September (13.7%) and December (33.5%) are the seasonal
+    trough/peak. Boundaries were kept as proposed because changing them to
+    balance prevalence would be outcome-driven; the shift must be disclosed
+    in every evaluation report and prevalence reported alongside all metrics.
+  change_policy: >
+    Any boundary change must be documented with rationale in this file before
+    model comparison begins, and never after viewing final test results.
+
+metrics:
+  ranking: [pr_auc, roc_auc]
+  operational:
+    name: recall_at_precision_floor
+    precision_floor_candidate: 0.70
+    precision_floor_status: candidate_not_stakeholder_approved
+    threshold_selection_data: validation_only
+    fallback: >
+      If no agreed floor exists, report precision-recall behaviour without
+      presenting a recall-at-precision claim as an operational requirement.
+  calibration:
+    required: [brier_score, reliability_diagram]
+    optional: [expected_calibration_error]
+    fitting_data: train_or_validation_only
+  test_set_policy: >
+    Test outcomes are used once, for final evaluation, after model
+    configuration, threshold and calibration are frozen. Test results must
+    not influence features, hyperparameters, calibration, thresholds or
+    model selection.
+
+rescheduling:
+  status: non_causal_sensitivity_analysis
+  candidate_shifts_minutes: [-60, -30, -15, 15, 30, 60]
+  constraints: >
+    Crew/aircraft rotations, gates, airport capacity, passenger connections
+    and network knock-on effects are not modelled. Outputs are model-based
+    risk comparisons, never operational schedule recommendations.
+
+schemas:
+  flight_row_id:
+    definition: >
+      Stable, unique identifier for every source flight row, created at
+      ingestion before exclusions or sorting, preserved in all derived
+      artifacts. Must not be derived from target or post-departure fields.
+      A date+carrier+flight combination is NOT guaranteed unique.
+  labelled_data:
+    grain: one row per retained source flight
+    required_fields:
+      - flight_row_id
+      - scheduled departure date/time fields (parsed, normalized)
+      - carrier, origin, dest, flight
+      - substantial_delay (nullable)
+      - label_status (known | unknown)
+  feature_matrix:
+    grain: one row per eligible labelled flight
+    outside_estimator_columns: [flight_row_id, substantial_delay]
+    companion_manifest:
+      per_feature: [name, source, availability rule at T-60, type, missing-value policy, leakage status]
+    preprocessing_rule: >
+      Transformations that learn from data (imputers, scalers, encoders) are
+      fitted on training rows only, inside model pipelines.
+  prediction_file:
+    required_fields: [flight_row_id, y_true, y_probability, split, model_name, run_id]
+    constraints:
+      - probabilities finite and within [0, 1]
+      - flight_row_id unique within each (model, split)
+      - IDs join to the split manifest by value, never by row order
+  run_metadata:
+    required_fields:
+      - data manifest fingerprints
+      - code commit
+      - random seed where applicable
+      - package versions
+      - feature-manifest version
+      - split-manifest version
+
+ownership:
+  source: docs/Engineering/Implementation-Phases.md
+  allocation:
+    - {contributor: 1, component: data preparation, owns: loading/profiling/label/exclusions}
+    - {contributor: 2, component: feature engineering, owns: schedule/weather/historical features and leakage tests}
+    - {contributor: 3, component: classical models, owns: logistic regression and XGBoost}
+    - {contributor: 4, component: deep learning, owns: embedding MLP and temporal go/no-go}
+    - {contributor: 5, component: evaluation and rescheduling, owns: split contract, metrics, calibration, what-if analysis, final integration}
+
+open_assumptions:
+  - id: TZ-001
+    topic: time_hour semantics
+    observation: >
+      flights.time_hour values (e.g. 2013-01-01T10:00:00Z for a 05:15 local
+      departure) and weather.time_hour appear to be UTC with local time =
+      UTC-5 (EST). Weather rows are stamped on the hour.
+    status: to_verify_in_phase_2_before_weather_join
+    action_if_unresolved: block the weather as-of join rather than guess silently

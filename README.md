@@ -121,7 +121,15 @@ This is the intended logical organization, not a claim that every directory or s
 
 ## 11. Getting started
 
-Use the Python version selected by the team and recorded in the repository. If no version has been agreed, Python 3.11 is a reasonable starting point. Create and activate a virtual environment before installing the project dependencies. Keep one canonical dependency file (`requirements.txt` or `pyproject.toml`) once the implementation begins.
+The agreed interpreter is **Python 3.13** and the canonical dependency file is `requirements.txt` (frozen in `configs/project_contract.yaml`):
+
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pytest          # baseline contract tests must pass
+```
 
 The raw input directory should contain the five supplied CSV files listed above. Before training models, run the data profile and label audit and review their counts. Do not treat the reference numbers in this README as values to hard-code into code; they are validation expectations for the supplied version of the files.
 
@@ -133,6 +141,9 @@ The raw input directory should contain the five supplied CSV files listed above.
 - [Use Case Diagram](docs/Architecture%20Diagrams/Use-Case-Diagram.md)
 - [Entity Relationship Diagram](docs/Architecture%20Diagrams/ER-Diagram.md)
 - [UML Class Diagram](docs/Architecture%20Diagrams/UML-Class-Diagram.md)
+- [Project Contract (frozen Phase 0 decisions)](configs/project_contract.yaml)
+- [Implementation Phases](docs/Engineering/Implementation-Phases.md)
+- [Phase 0 Inventory and Environment Report](reports/phase0_repository_inventory.md)
 
 ## 13. Current limitations
 
