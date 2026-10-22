@@ -23,11 +23,20 @@ def load_reference_profile(contract_path: Path) -> dict:
 
 def compare_with_reference(summary: dict, reference: dict) -> dict:
     """Measured label counts vs contract expectations for the supplied files."""
+    # The contract names the flight-row count `flights_rows`; the summary
+    # calls it `total_rows`.
+    reference_keys = {
+        "total_rows": "flights_rows",
+        "known_labels": "known_labels",
+        "positive": "positive",
+        "negative": "negative",
+        "unknown_labels": "unknown_labels",
+    }
     checks = {}
-    for key in ("total_rows", "known_labels", "positive", "negative", "unknown_labels"):
-        expected = reference.get(key)
-        measured = summary.get(key)
-        checks[key] = {
+    for summary_key, reference_key in reference_keys.items():
+        expected = reference.get(reference_key)
+        measured = summary.get(summary_key)
+        checks[summary_key] = {
             "expected": expected,
             "measured": measured,
             "matches": (expected == measured) if expected is not None else None,

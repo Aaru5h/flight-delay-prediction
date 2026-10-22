@@ -1,0 +1,303 @@
+{
+  "phase": 1,
+  "schema_validation": {
+    "flights": {
+      "passed": true,
+      "rows": 336776,
+      "columns": 19
+    },
+    "airlines": {
+      "passed": true,
+      "rows": 16,
+      "columns": 2
+    },
+    "airports": {
+      "passed": true,
+      "rows": 1458,
+      "columns": 8
+    },
+    "planes": {
+      "passed": true,
+      "rows": 3322,
+      "columns": 9
+    },
+    "weather": {
+      "passed": true,
+      "rows": 26115,
+      "columns": 15
+    }
+  },
+  "source_files": {
+    "flights": {
+      "file": "nyc_flights.csv",
+      "rows": 336776,
+      "columns": 19,
+      "size_bytes": 31053850,
+      "sha256": "563db8f117faf6ffd76aa868099df37dfa78dc17b5ac6d3d9ea6476e051a0bc4"
+    },
+    "airlines": {
+      "file": "nyc_airlines.csv",
+      "rows": 16,
+      "columns": 2,
+      "size_bytes": 386,
+      "sha256": "162551bd3401a12d63db3d92b7e66af3017d2e40d55919d6a678489323c10609"
+    },
+    "airports": {
+      "file": "nyc_airports.csv",
+      "rows": 1458,
+      "columns": 8,
+      "size_bytes": 104302,
+      "sha256": "d3b9145e764bc18aeab0f99afdf6fa4ecd7f246d768ca1b5c6dabc0e463aac2b"
+    },
+    "planes": {
+      "file": "nyc_planes.csv",
+      "rows": 3322,
+      "columns": 9,
+      "size_bytes": 247198,
+      "sha256": "778962edec8339f6f6edb1d6506869f61cab573eda03d7e162d2899c76d04c1a"
+    },
+    "weather": {
+      "file": "nyc_weather.csv",
+      "rows": 26115,
+      "columns": 15,
+      "size_bytes": 2294220,
+      "sha256": "e70e506bdf32170c3f7d7c5914d77f268b3399f922d2860f09556eaac30fe73b"
+    }
+  },
+  "flights_missingness": {
+    "dep_time": {
+      "missing": 8255,
+      "pct": 2.4512
+    },
+    "dep_delay": {
+      "missing": 8255,
+      "pct": 2.4512
+    },
+    "arr_time": {
+      "missing": 8713,
+      "pct": 2.5872
+    },
+    "arr_delay": {
+      "missing": 9430,
+      "pct": 2.8001
+    },
+    "tailnum": {
+      "missing": 2512,
+      "pct": 0.7459
+    },
+    "air_time": {
+      "missing": 9430,
+      "pct": 2.8001
+    },
+    "substantial_delay": {
+      "missing": 9430,
+      "pct": 2.8001
+    }
+  },
+  "duplicates": {
+    "full_duplicate_rows_in_flights": 0,
+    "lookup_key_duplicates": {
+      "airlines": {
+        "key_columns": [
+          "carrier"
+        ],
+        "duplicate_key_rows": 0
+      },
+      "airports": {
+        "key_columns": [
+          "faa"
+        ],
+        "duplicate_key_rows": 0
+      },
+      "planes": {
+        "key_columns": [
+          "tailnum"
+        ],
+        "duplicate_key_rows": 0
+      },
+      "weather": {
+        "key_columns": [
+          "origin",
+          "time_hour"
+        ],
+        "duplicate_key_rows": 0
+      }
+    }
+  },
+  "schedule_parsing": {
+    "sched_dep_time_invalid": 0,
+    "sched_arr_time_invalid": 0,
+    "sched_dep_ts_missing": 0
+  },
+  "date_coverage": {
+    "min": "2013-01-01",
+    "max": "2013-12-31",
+    "distinct_days": 365
+  },
+  "label_summary": {
+    "total_rows": 336776,
+    "known_labels": 327346,
+    "positive": 80100,
+    "negative": 247246,
+    "unknown_labels": 9430,
+    "positive_prevalence": 0.244695,
+    "unknown_label_detail": {
+      "also_missing_dep_time": 8255,
+      "dep_time_present": 1175
+    }
+  },
+  "reference_profile_checks": {
+    "total_rows": {
+      "expected": 336776,
+      "measured": 336776,
+      "matches": true
+    },
+    "known_labels": {
+      "expected": 327346,
+      "measured": 327346,
+      "matches": true
+    },
+    "positive": {
+      "expected": 80100,
+      "measured": 80100,
+      "matches": true
+    },
+    "negative": {
+      "expected": 247246,
+      "measured": 247246,
+      "matches": true
+    },
+    "unknown_labels": {
+      "expected": 9430,
+      "measured": 9430,
+      "matches": true
+    }
+  },
+  "join_coverage": {
+    "airlines": {
+      "unmatched_carriers": {
+        "carrier_codes": [],
+        "rows": 0
+      }
+    },
+    "airports_origin": {
+      "unmatched_airports": {
+        "airport_codes": [],
+        "rows": 0
+      }
+    },
+    "airports_destination": {
+      "unmatched_airports": {
+        "airport_codes": [
+          "BQN",
+          "PSE",
+          "SJU",
+          "STT"
+        ],
+        "rows": 7602
+      }
+    },
+    "planes": {
+      "non_missing_tailnum_rows": 334264,
+      "matched_rows": 284170,
+      "unmatched_rows": 50094
+    },
+    "weather": {
+      "rows_with_same_hour_observation": 335220,
+      "rows_without_same_hour_observation": 1556,
+      "note": "profile only; T-60 as-of join is Phase 2"
+    }
+  },
+  "monthly_label_distribution": [
+    {
+      "month": 1,
+      "labelled": 26398,
+      "positive": 6201,
+      "negative": 20197,
+      "prevalence": 0.234904
+    },
+    {
+      "month": 2,
+      "labelled": 23611,
+      "positive": 5615,
+      "negative": 17996,
+      "prevalence": 0.237813
+    },
+    {
+      "month": 3,
+      "labelled": 27902,
+      "positive": 6586,
+      "negative": 21316,
+      "prevalence": 0.23604
+    },
+    {
+      "month": 4,
+      "labelled": 27564,
+      "positive": 7925,
+      "negative": 19639,
+      "prevalence": 0.287513
+    },
+    {
+      "month": 5,
+      "labelled": 28128,
+      "positive": 6376,
+      "negative": 21752,
+      "prevalence": 0.226678
+    },
+    {
+      "month": 6,
+      "labelled": 27075,
+      "positive": 8535,
+      "negative": 18540,
+      "prevalence": 0.315235
+    },
+    {
+      "month": 7,
+      "labelled": 28293,
+      "positive": 9112,
+      "negative": 19181,
+      "prevalence": 0.322058
+    },
+    {
+      "month": 8,
+      "labelled": 28756,
+      "positive": 7073,
+      "negative": 21683,
+      "prevalence": 0.245966
+    },
+    {
+      "month": 9,
+      "labelled": 27010,
+      "positive": 3705,
+      "negative": 23305,
+      "prevalence": 0.137171
+    },
+    {
+      "month": 10,
+      "labelled": 28618,
+      "positive": 5026,
+      "negative": 23592,
+      "prevalence": 0.175624
+    },
+    {
+      "month": 11,
+      "labelled": 26971,
+      "positive": 4882,
+      "negative": 22089,
+      "prevalence": 0.181009
+    },
+    {
+      "month": 12,
+      "labelled": 27020,
+      "positive": 9064,
+      "negative": 17956,
+      "prevalence": 0.335455
+    }
+  ],
+  "notes": [
+    "Missing arr_delay is an unknown label, not a negative and not a confirmed cancellation (no cancellation/diversion flag exists).",
+    "arr_delay is an audit column in the labelled dataset only; it must never enter a model's feature matrix.",
+    "Weather coverage here is a same-hour profile; the T-60 as-of join is built in Phase 2.",
+    "Unmatched destination airports (e.g. BQN, PSE, SJU, STT) and incomplete plane-lookup coverage are preserved and reported, never dropped."
+  ]
+}
