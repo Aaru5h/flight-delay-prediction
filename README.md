@@ -162,6 +162,20 @@ This writes `data/processed/phase2_features.csv`, the versioned manifest at
 estimator; identifiers, target, cutoff, weather timestamp, and weather age are
 audit fields outside `X`.
 
+### Classical baselines (Phase 3)
+
+Train the Logistic Regression and bounded-search XGBoost baselines:
+
+```bash
+python -m src.models.classical.train
+```
+
+The command fits preprocessing and models on the training window only, selects
+the XGBoost candidate by validation PR AUC, and writes reloadable pipelines,
+the split manifest, metadata, and validation prediction files under
+`artifacts/classical/`. Test labels are deliberately not scored in Phase 3;
+Phase 5 owns the final held-out evaluation.
+
 ## 12. Project documentation
 
 - [Product Requirements Document](docs/Product/PRD.md)
