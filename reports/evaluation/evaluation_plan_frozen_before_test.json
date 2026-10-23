@@ -1,0 +1,32 @@
+{
+  "frozen_at": "2026-10-23T12:21:22+00:00",
+  "model_selection_rule": "highest validation PR AUC on identical validation IDs",
+  "primary_model": "logistic_regression",
+  "threshold_rule": "maximum validation F1 per model",
+  "precision_floor": {
+    "status": "not stakeholder approved",
+    "value": null
+  },
+  "calibration": {
+    "method": "none",
+    "reason": "no independent calibration fold reserved; report raw calibration diagnostics"
+  },
+  "thresholds": {
+    "logistic_regression": {
+      "rule": "maximum validation F1; ties resolved by first sklearn threshold order",
+      "threshold": 0.3176841983194594,
+      "validation_precision": 0.27838427947598254,
+      "validation_recall": 0.49650670026342913,
+      "validation_f1": 0.35674608073077396
+    },
+    "xgboost": {
+      "rule": "maximum validation F1; ties resolved by first sklearn threshold order",
+      "threshold": 0.17025624,
+      "validation_precision": 0.2818607764390897,
+      "validation_recall": 0.4823044324819608,
+      "validation_f1": 0.35579400954754764
+    }
+  },
+  "feature_manifest_version": "2.0.0",
+  "split_manifest_version": "1.0.0"
+}

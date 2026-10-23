@@ -23,6 +23,7 @@ import yaml
 from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_score
 
 from src.data import config as data_config
+from src.evaluation.split import assign_chronological_split
 from src.models.classical.pipelines import build_logistic_pipeline, build_xgboost_pipeline
 
 ROOT = data_config.PROJECT_ROOT
@@ -46,15 +47,8 @@ def _commit() -> str | None:
         return None
 
 
-def assign_split(dates: pd.Series) -> pd.Series:
-    # Phase 2 CSV timestamps carry a trailing Z for stable serialization. The
-    # split contract is based on the recorded service date, not an instant.
-    dates = pd.to_datetime(dates, errors="raise", utc=True).dt.tz_localize(None)
-    split = np.select(
-        [dates <= pd.Timestamp("2013-08-31"), dates <= pd.Timestamp("2013-10-31")],
-        ["train", "validation"], default="test",
-    )
-    return pd.Series(split, index=dates.index, dtype="string")
+# Backward-compatible name; Contributor 5's shared split module is canonical.
+assign_split = assign_chronological_split
 
 
 def load_phase2(feature_path: Path, manifest_path: Path) -> tuple[pd.DataFrame, dict, list[str], list[str]]:

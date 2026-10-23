@@ -176,6 +176,25 @@ the split manifest, metadata, and validation prediction files under
 `artifacts/classical/`. Test labels are deliberately not scored in Phase 3;
 Phase 5 owns the final held-out evaluation.
 
+### Shared evaluation and final comparison (Contributor 5)
+
+After both baseline artifacts exist, run the frozen common evaluation:
+
+```bash
+python -m src.evaluation.run
+```
+
+This regenerates the canonical split manifest and summary, validates prediction
+IDs and labels, freezes model and threshold decisions from validation data,
+scores the held-out test set once, and generates ranking, calibration, and
+confusion-matrix plots. Outputs are stored in `reports/evaluation/`; the final
+interpretation and “Identify the Gap” section are in
+`reports/contributor5_final_evaluation.md`.
+
+No operational precision floor was stakeholder-approved. The current comparison
+therefore uses maximum validation F1 as its documented operating-threshold rule
+and does not present the contract's candidate 0.70 precision as a requirement.
+
 ## 12. Project documentation
 
 - [Product Requirements Document](docs/Product/PRD.md)

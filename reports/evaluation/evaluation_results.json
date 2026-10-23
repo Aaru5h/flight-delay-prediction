@@ -1,0 +1,160 @@
+{
+  "phase": 5,
+  "owner": "Contributor 5",
+  "generated_at": "2026-10-23T12:21:24+00:00",
+  "split_profile": [
+    {
+      "split": "train",
+      "rows": 217727,
+      "positive": 57423,
+      "min_date": "2013-01-01",
+      "max_date": "2013-08-31",
+      "unique_dates": 243,
+      "negative": 160304,
+      "positive_prevalence": 0.26373853495432353
+    },
+    {
+      "split": "validation",
+      "rows": 55628,
+      "positive": 8731,
+      "min_date": "2013-09-01",
+      "max_date": "2013-10-31",
+      "unique_dates": 61,
+      "negative": 46897,
+      "positive_prevalence": 0.15695333285395843
+    },
+    {
+      "split": "test",
+      "rows": 53991,
+      "positive": 13946,
+      "min_date": "2013-11-01",
+      "max_date": "2013-12-31",
+      "unique_dates": 61,
+      "negative": 40045,
+      "positive_prevalence": 0.2583023096442
+    }
+  ],
+  "selection": {
+    "frozen_at": "2026-10-23T12:21:22+00:00",
+    "model_selection_rule": "highest validation PR AUC on identical validation IDs",
+    "primary_model": "logistic_regression",
+    "threshold_rule": "maximum validation F1 per model",
+    "precision_floor": {
+      "status": "not stakeholder approved",
+      "value": null
+    },
+    "calibration": {
+      "method": "none",
+      "reason": "no independent calibration fold reserved; report raw calibration diagnostics"
+    },
+    "thresholds": {
+      "logistic_regression": {
+        "rule": "maximum validation F1; ties resolved by first sklearn threshold order",
+        "threshold": 0.3176841983194594,
+        "validation_precision": 0.27838427947598254,
+        "validation_recall": 0.49650670026342913,
+        "validation_f1": 0.35674608073077396
+      },
+      "xgboost": {
+        "rule": "maximum validation F1; ties resolved by first sklearn threshold order",
+        "threshold": 0.17025624,
+        "validation_precision": 0.2818607764390897,
+        "validation_recall": 0.4823044324819608,
+        "validation_f1": 0.35579400954754764
+      }
+    },
+    "feature_manifest_version": "2.0.0",
+    "split_manifest_version": "1.0.0"
+  },
+  "validation_metrics": {
+    "logistic_regression": {
+      "rows": 55628,
+      "positive": 8731,
+      "negative": 46897,
+      "positive_prevalence": 0.15695333285395843,
+      "pr_auc": 0.3188634089414798,
+      "roc_auc": 0.6815184272499235,
+      "brier_score": 0.13328706046608418,
+      "ece_10_equal_width": 0.0940231308057217,
+      "threshold": 0.3176841983194594,
+      "precision": 0.27838427947598254,
+      "recall": 0.49650670026342913,
+      "f1": 0.35674608073077396,
+      "confusion_matrix": {
+        "tn": 35660,
+        "fp": 11237,
+        "fn": 4396,
+        "tp": 4335
+      }
+    },
+    "xgboost": {
+      "rows": 55628,
+      "positive": 8731,
+      "negative": 46897,
+      "positive_prevalence": 0.15695333285395843,
+      "pr_auc": 0.29450617103022136,
+      "roc_auc": 0.6744518146290504,
+      "brier_score": 0.12467140076430883,
+      "ece_10_equal_width": 0.021922121804118434,
+      "threshold": 0.17025624,
+      "precision": 0.2818607764390897,
+      "recall": 0.4823044324819608,
+      "f1": 0.35579400954754764,
+      "confusion_matrix": {
+        "tn": 36168,
+        "fp": 10729,
+        "fn": 4520,
+        "tp": 4211
+      }
+    }
+  },
+  "test_metrics": {
+    "logistic_regression": {
+      "rows": 53991,
+      "positive": 13946,
+      "negative": 40045,
+      "positive_prevalence": 0.2583023096442,
+      "pr_auc": 0.4504848801563631,
+      "roc_auc": 0.6905194110017884,
+      "brier_score": 0.1735141914943954,
+      "ece_10_equal_width": 0.02366902466088701,
+      "threshold": 0.3176841983194594,
+      "precision": 0.46319636065329256,
+      "recall": 0.4453606768966012,
+      "f1": 0.4541034545786876,
+      "confusion_matrix": {
+        "tn": 32847,
+        "fp": 7198,
+        "fn": 7735,
+        "tp": 6211
+      }
+    },
+    "xgboost": {
+      "rows": 53991,
+      "positive": 13946,
+      "negative": 40045,
+      "positive_prevalence": 0.2583023096442,
+      "pr_auc": 0.4857084703656863,
+      "roc_auc": 0.6959737169698144,
+      "brier_score": 0.1825104182413175,
+      "ece_10_equal_width": 0.11219306895958711,
+      "threshold": 0.17025624,
+      "precision": 0.45805278750336653,
+      "recall": 0.4878101247669583,
+      "f1": 0.47246336551149387,
+      "confusion_matrix": {
+        "tn": 31996,
+        "fp": 8049,
+        "fn": 7143,
+        "tp": 6803
+      }
+    }
+  },
+  "population_check": "both models evaluated on identical IDs in each split",
+  "limitations": [
+    "one year of NYC-origin flights",
+    "retrospective weather observations",
+    "incomplete destination references",
+    "no approved operational precision floor"
+  ]
+}
