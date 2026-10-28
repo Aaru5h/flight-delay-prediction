@@ -1,10 +1,10 @@
-"""Historical delay aggregates verified to be known before each row's T-60 cutoff.
+"""Historical delay aggregates with a conservative outcome-availability cutoff.
 
 Enforces two strict temporal availability invariants:
 1. `sched_date < target_flight.sched_date`: strictly prior calendar date (no same-day leakage).
-2. `actual_arr_utc <= target_flight.prediction_cutoff_utc`: every prior flight outcome
-   used was physically completed and known before the flight's T-60 cutoff.
-   Any prior-date flight that landed late at night or early morning after cutoff is excluded.
+2. A prior outcome enters only after a conservative completion bound: scheduled
+   NYC departure plus 24 hours and any positive arrival delay. This avoids
+   treating destination-local scheduled arrival times as New York local times.
 """
 
 from __future__ import annotations
@@ -23,19 +23,22 @@ def _get_prediction_cutoff_utc(df: pd.DataFrame) -> pd.Series:
     return local.dt.tz_convert("UTC") - dt.timedelta(minutes=60)
 
 
-def _get_actual_arrival_utc(df: pd.DataFrame) -> pd.Series:
+def _outcome_available_utc(df: pd.DataFrame) -> pd.Series:
+    """Use an explicit availability timestamp or a conservative source-data bound.
+
+    The supplied arrival clock is destination-local. Without a verified release
+    timestamp, a 24-hour flight-duration bound plus positive arrival delay
+    withholds an outcome until safely after its expected arrival. Unknown
+    arrival delays never enter the historical pool.
+    """
     if "actual_arr_utc" in df.columns:
         return pd.to_datetime(df["actual_arr_utc"], utc=True)
-    if "sched_arr_ts" in df.columns:
-        arr_ts = pd.to_datetime(df["sched_arr_ts"], errors="coerce")
-        if "arr_delay" in df.columns:
-            arr_delay = pd.to_numeric(df["arr_delay"], errors="coerce").fillna(0.0)
-            arr_ts = arr_ts + pd.to_timedelta(arr_delay, unit="m")
-        local = arr_ts.dt.tz_localize("America/New_York", ambiguous="NaT", nonexistent="NaT")
-        return local.dt.tz_convert("UTC")
     dep_ts = pd.to_datetime(df["sched_dep_ts"], errors="coerce")
-    local = dep_ts.dt.tz_localize("America/New_York", ambiguous="NaT", nonexistent="NaT")
-    return local.dt.tz_convert("UTC") + dt.timedelta(hours=2)
+    dep_utc = dep_ts.dt.tz_localize(
+        "America/New_York", ambiguous="NaT", nonexistent="NaT"
+    ).dt.tz_convert("UTC")
+    delay = pd.to_numeric(df["arr_delay"], errors="coerce") if "arr_delay" in df else pd.Series(np.nan, index=df.index)
+    return (dep_utc + dt.timedelta(hours=24) + pd.to_timedelta(delay.clip(lower=0), unit="m")).where(delay.notna())
 
 
 def _compute_verified_prior(
@@ -44,39 +47,20 @@ def _compute_verified_prior(
     prefix: str,
     smoothing: float = 20.0,
 ) -> pd.DataFrame:
-    """Compute prior count and smoothed delay rate with verified T-60 arrival timing."""
+    """Compute prior count and smoothed delay rate with T-60 availability."""
     n = len(df)
     prior_flights = np.zeros(n, dtype=np.int64)
     prior_delays = np.zeros(n, dtype=np.float64)
-
-    # Global daily sums for prior baseline smoothing
-    base = df.loc[
-        df["substantial_delay"].notna(),
-        ["sched_date", "substantial_delay"],
-    ].copy()
-    totals = (
-        base.groupby("sched_date")["substantial_delay"]
-        .agg(all_delays="sum", all_flights="count")
-        .sort_index()
-    )
-    totals["global_prior_delays"] = totals["all_delays"].cumsum() - totals["all_delays"]
-    totals["global_prior_flights"] = (
-        totals["all_flights"].cumsum() - totals["all_flights"]
-    )
-    totals["global_prior_rate"] = totals["global_prior_delays"] / totals[
-        "global_prior_flights"
-    ].replace(0, np.nan)
-    global_prior_map = totals["global_prior_rate"].to_dict()
 
     # Target fields
     target_dates = pd.to_datetime(df["sched_date"]).values
     target_cutoffs = df["_cutoff_utc"].values
 
-    # Historical candidate pool: rows with valid substantial_delay and actual arrival
-    valid_hist = df["substantial_delay"].notna() & df["_actual_arr_utc"].notna()
+    # Historical candidate pool: rows with a known label and availability bound.
+    valid_hist = df["substantial_delay"].notna() & df["_available_utc"].notna()
     hist_pool = df.loc[
         valid_hist,
-        ["sched_date", "_actual_arr_utc", "substantial_delay"] + group_cols,
+        ["sched_date", "_available_utc", "substantial_delay"] + group_cols,
     ].copy()
 
     # Pre-group hist pool by group_cols
@@ -124,34 +108,34 @@ def _compute_verified_prior(
             # Add completed flights from date d to running pool for dates > d
             if d in g_hist_by_date:
                 h_d = g_hist_by_date[d]
-                running_arr.extend(h_d["_actual_arr_utc"].values)
+                running_arr.extend(h_d["_available_utc"].values)
                 running_y.extend(h_d["substantial_delay"].values.astype(np.float64))
 
     # Compute smoothed rate and missing indicator
     res = pd.DataFrame(index=df.index)
     res[f"{prefix}_prior_count"] = pd.Series(prior_flights, index=df.index, dtype="Int64")
 
-    # Map global prior rate by sched_date
-    sched_dates_series = pd.to_datetime(df["sched_date"])
-    global_prior = sched_dates_series.map(global_prior_map).astype(float)
-
-    smoothed_rate = (prior_delays + smoothing * global_prior) / (
+    # A fixed symmetric prior has no future or not-yet-available labels.
+    smoothed_rate = (prior_delays + smoothing * 0.5) / (
         prior_flights + smoothing
     )
     is_missing = prior_flights == 0
-    res[f"{prefix}_delay_rate"] = smoothed_rate.where(~is_missing, np.nan)
+    res[f"{prefix}_delay_rate"] = np.where(~is_missing, smoothed_rate, np.nan)
     res[f"{prefix}_history_missing"] = is_missing
 
     return res
 
 
 def add_historical_features(
-    flights: pd.DataFrame, smoothing: float = 20.0
+    flights: pd.DataFrame, smoothing: float = 20.0, history_training_end: str | None = None
 ) -> pd.DataFrame:
-    """Add smoothed carrier and route rates based strictly on outcomes available at T-60."""
+    """Add carrier and route rates using only conservatively available outcomes."""
     df = flights.copy()
     df["_cutoff_utc"] = _get_prediction_cutoff_utc(df)
-    df["_actual_arr_utc"] = _get_actual_arrival_utc(df)
+    df["_available_utc"] = _outcome_available_utc(df)
+    if history_training_end is not None:
+        # Validation/test labels are evaluation outcomes, never feature inputs.
+        df.loc[pd.to_datetime(df["sched_date"]).gt(pd.Timestamp(history_training_end)), "_available_utc"] = pd.NaT
 
     if "route" not in df.columns and "origin" in df.columns and "dest" in df.columns:
         df["route"] = df["origin"].astype(str) + "_" + df["dest"].astype(str)
@@ -173,5 +157,5 @@ def add_historical_features(
     df["route_delay_rate"] = route_feats["route_delay_rate"]
     df["route_history_missing"] = route_feats["route_history_missing"]
 
-    df = df.drop(columns=["_cutoff_utc", "_actual_arr_utc"])
+    df = df.drop(columns=["_cutoff_utc", "_available_utc"])
     return df

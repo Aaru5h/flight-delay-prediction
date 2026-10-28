@@ -8,6 +8,7 @@ import pytest
 from src.evaluation.calibration import fit_probability_calibrator
 from src.evaluation.metrics import compute_ece, evaluate_predictions
 from src.evaluation.threshold import select_operating_thresholds
+from src.evaluation.evaluate_aml import _check_inputs
 
 
 def test_threshold_selection_rejects_non_validation_split():
@@ -58,3 +59,23 @@ def test_calibrator_fitting():
     assert np.all(cal_probs >= 0.0) and np.all(cal_probs <= 1.0)
     # Monotonicity check
     assert np.all(np.diff(cal_probs) >= -1e-7)
+
+
+def test_one_alert_does_not_satisfy_operating_precision_floor():
+    y = np.array([1] + [0] * 199)
+    probability = np.array([0.99] + [0.01] * 199)
+    decision = select_operating_thresholds(y, probability, precision_floor=0.70)
+    assert decision["precision_requirement"]["floor_achieved"] is False
+    assert decision["precision_requirement"]["threshold"] is None
+
+
+def test_evaluator_rejects_stale_feature_table(tmp_path):
+    feature = tmp_path / "features.csv"
+    feature.write_text("flight_row_id,substantial_delay,sched_date\na,1,2013-01-01\n")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('{"manifest_sha256":"manifest"}')
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    (artifacts / "run_metadata.json").write_text('{"feature_table_sha256":"stale","feature_manifest_sha256":"manifest"}')
+    with pytest.raises(ValueError, match="does not match this feature table"):
+        _check_inputs(feature, manifest, artifacts)

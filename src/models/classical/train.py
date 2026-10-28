@@ -140,11 +140,17 @@ def run_phase3(
     train = frame.loc[frame["split"].eq("train")]
     validation = frame.loc[frame["split"].eq("validation")]
     test = frame.loc[frame["split"].eq("test")]
+    # Keep later validation dates available for calibration and threshold review.
+    tuning = validation.loc[pd.to_datetime(validation["sched_date"], utc=True) < pd.Timestamp("2013-09-25", tz="UTC")]
     X_train, y_train = train[allowlist], train["substantial_delay"].astype(int)
     X_validation, y_validation = validation[allowlist], validation["substantial_delay"].astype(int)
+    X_tuning, y_tuning = tuning[allowlist], tuning["substantial_delay"].astype(int)
 
+    code_sha256 = hashlib.sha256(
+        (_sha256(Path(__file__)) + _sha256(Path(__file__).with_name("pipelines.py"))).encode()
+    ).hexdigest()
     run_id = "phase3-" + hashlib.sha256(
-        (_sha256(Path(feature_path)) + json.dumps(settings, sort_keys=True)).encode()
+        (_sha256(Path(feature_path)) + json.dumps(settings, sort_keys=True) + code_sha256).encode()
     ).hexdigest()[:12]
     logistic = build_logistic_pipeline(categorical, numeric, settings["logistic_regression"])
     logistic.fit(X_train, y_train)
@@ -152,7 +158,7 @@ def run_phase3(
     logistic_metrics = validation_metrics(y_validation, logistic_probability)
 
     xgb, xgb_settings, trials = tune_xgboost(
-        X_train, y_train, X_validation, y_validation, categorical, numeric,
+        X_train, y_train, X_tuning, y_tuning, categorical, numeric,
         settings["xgboost_candidates"], settings["random_seed"],
     )
     xgb_probability = xgb.predict_proba(X_validation)[:, 1]
@@ -176,6 +182,7 @@ def run_phase3(
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "test_policy": "test labels not used for fitting, tuning, or Phase 3 metrics; Phase 5 owns final test evaluation",
         "rows": {"train": len(train), "validation": len(validation), "test_sealed": len(test)},
+        "xgboost_tuning_window": {"start": "2013-09-01", "end": "2013-09-24", "rows": len(tuning)},
         "target_prevalence": {"train": float(y_train.mean()), "validation": float(y_validation.mean())},
         "features": {"count": len(allowlist), "allowlist": allowlist, "categorical": categorical, "numeric": numeric},
         "versions": {"python": platform.python_version(), "pandas": pd.__version__, "scikit_learn": sklearn.__version__, "xgboost": xgboost.__version__},
@@ -186,13 +193,24 @@ def run_phase3(
         "split_manifest_version": settings["split_manifest_version"],
         "split_contract": contract["split"],
         "code_commit": _commit(),
+        "code_sha256": code_sha256,
         "models": {
             "logistic_regression": {"settings": settings["logistic_regression"], "validation_metrics": logistic_metrics},
-            "xgboost": {"selected_settings": xgb_settings, "selection_metric": "validation PR AUC", "validation_metrics": xgb_metrics, "trials": trials},
+            "xgboost": {"selected_settings": xgb_settings, "selection_metric": "Sep 1–24 validation PR AUC", "validation_metrics": xgb_metrics, "trials": trials},
         },
     }
     (artifacts_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     (reports_dir / "phase3_classical_baselines.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    (reports_dir / "phase3_classical_baselines.md").write_text(
+        "# Phase 3 — Classical ML baselines\n\n"
+        f"Run `{run_id}` used {len(train):,} training, {len(validation):,} validation, and {len(test):,} sealed test rows. "
+        "Both models use the same feature allowlist and training-only preprocessing. "
+        "XGBoost candidates were selected on Sep 1–24 validation PR-AUC; later dates are reserved for Phase 5.\n\n"
+        "| Model | Full validation PR-AUC | ROC-AUC | Brier |\n|---|---:|---:|---:|\n"
+        f"| Logistic Regression | {logistic_metrics['pr_auc']:.4f} | {logistic_metrics['roc_auc']:.4f} | {logistic_metrics['brier_score']:.4f} |\n"
+        f"| XGBoost | {xgb_metrics['pr_auc']:.4f} | {xgb_metrics['roc_auc']:.4f} | {xgb_metrics['brier_score']:.4f} |\n\n"
+        "These are validation diagnostics. See Phase 5 for calibrated selection and retrospective test evaluation.\n"
+    )
     return metadata
 
 

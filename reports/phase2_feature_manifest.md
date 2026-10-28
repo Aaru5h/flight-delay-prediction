@@ -1,58 +1,52 @@
-# Phase 2 — Feature Manifest
+# Phase 2 — Feature manifest
 
-## 1. Feature Allowlist and Specifications
+Canonical manifest: `data/processed/phase2_feature_manifest.json` (version 2.2.0; SHA-256 `bf461f00978c9369de36b1847a1bf1ac9a248fa5f12664b4e582ac26c87d3e3b`).
 
-| Feature | Type | Source | Availability at T-60 | Missing Policy |
-|---|---|---|---|---|
-| `carrier` | categorical | flights.carrier | Published airline schedule at ticket purchase (T-days) | never_missing |
-| `origin` | categorical | flights.origin | Published departure airport (EWR/JFK/LGA) | never_missing |
-| `dest` | categorical | flights.dest | Published destination airport code | never_missing |
-| `sched_dep_hour` | integer | flights.sched_dep_time | Scheduled departure time (T-60) | never_missing |
-| `sched_dep_minute_of_day` | integer | flights.sched_dep_minute | Minutes since midnight for scheduled departure | never_missing |
-| `sched_dep_dayofweek` | integer | flights.sched_date | Calendar day of week (0=Mon, 6=Sun) | never_missing |
-| `sched_dep_day` | integer | flights.sched_date | Day of month (1-31) | never_missing |
-| `sched_dep_month` | integer | flights.sched_date | Month of year (1-12) | never_missing |
-| `is_weekend` | binary | flights.sched_date | Weekend indicator (Saturday or Sunday) | never_missing |
-| `sin_hour` | float | computed | Cyclical transformation of sched_dep_hour | never_missing |
-| `cos_hour` | float | computed | Cyclical transformation of sched_dep_hour | never_missing |
-| `sin_dayofweek` | float | computed | Cyclical transformation of day of week | never_missing |
-| `cos_dayofweek` | float | computed | Cyclical transformation of day of week | never_missing |
-| `sin_month` | float | computed | Cyclical transformation of month | never_missing |
-| `cos_month` | float | computed | Cyclical transformation of month | never_missing |
-| `distance` | float | flights.distance | Scheduled flight distance in miles | never_missing |
-| `sched_flight_duration` | float | flights.sched_dep_ts, sched_arr_ts | Scheduled duration in minutes from timetable | never_missing |
-| `origin_hourly_flight_volume` | integer | flights.origin, sched_dep_ts | Published timetable departure count for origin airport in same hour | never_missing |
-| `dest_lat` | float | airports.lat | Airport geographic latitude lookup | median_imputed_or_indicator |
-| `dest_lon` | float | airports.lon | Airport geographic longitude lookup | median_imputed_or_indicator |
-| `dest_alt` | float | airports.alt | Airport elevation in feet lookup | median_imputed_or_indicator |
-| `dest_tz` | float | airports.tz | Airport timezone offset lookup | median_imputed_or_indicator |
-| `dest_unmatched` | binary | computed | Binary flag for destinations absent from FAA lookup | never_missing |
-| `temp` | float | weather.temp | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `dewp` | float | weather.dewp | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `humid` | float | weather.humid | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `wind_dir` | float | weather.wind_dir | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `wind_speed` | float | weather.wind_speed | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `wind_gust` | float | weather.wind_gust | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | zero_or_median_imputed |
-| `precip` | float | weather.precip | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | zero_imputed |
-| `pressure` | float | weather.pressure | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `visib` | float | weather.visib | Latest origin weather observation with timestamp <= T-60 (<= 180m old) | median_imputed_in_pipeline |
-| `weather_age_minutes` | float | computed | Age of origin weather observation at T-60 cutoff | median_imputed_or_flag |
-| `weather_missing_or_stale` | binary | computed | Indicator if weather was missing or older than 180 minutes | never_missing |
-| `carrier_prior_delay_rate` | float | historical_aggregates | Carrier prior delay rate from dates < target_date and actual arrival <= T-60 | smoothed_with_global_prior |
-| `carrier_prior_count` | integer | historical_aggregates | Count of prior flights for carrier available at T-60 | zero_when_none |
-| `has_prior_carrier_history` | binary | computed | Flag indicating carrier has >= 5 prior observations | never_missing |
-| `route_prior_delay_rate` | float | historical_aggregates | Route prior delay rate from dates < target_date and actual arrival <= T-60 | smoothed_with_global_prior |
-| `route_prior_count` | integer | historical_aggregates | Count of prior flights for route available at T-60 | zero_when_none |
-| `has_prior_route_history` | binary | computed | Flag indicating route has >= 5 prior observations | never_missing |
-| `origin_prior_delay_rate` | float | historical_aggregates | Origin prior delay rate from dates < target_date and actual arrival <= T-60 | smoothed_with_global_prior |
-| `origin_prior_count` | integer | historical_aggregates | Count of prior flights for origin available at T-60 | zero_when_none |
-| `has_prior_origin_history` | binary | computed | Flag indicating origin has >= 5 prior observations | never_missing |
+37 estimator inputs. Audit fields and the target are outside the model allowlist.
 
-## 2. Denylist (Prohibited Post-Departure Columns)
+| Feature | Type | Source | T−60 availability rule |
+|---|---|---|---|
+| `carrier` | categorical | published flight schedule | known by T-60 |
+| `origin` | categorical | published flight schedule | known by T-60 |
+| `dest` | categorical | published flight schedule | known by T-60 |
+| `route` | categorical | published flight schedule | known by T-60 |
+| `distance` | numeric | published flight schedule | known by T-60 |
+| `sched_dep_hour` | numeric | published flight schedule | known by T-60 |
+| `sched_day_of_week` | numeric | published flight schedule | known by T-60 |
+| `sched_month` | numeric | published flight schedule | known by T-60 |
+| `sched_day_of_year` | numeric | published flight schedule | known by T-60 |
+| `sched_hour_sin` | numeric | published flight schedule | known by T-60 |
+| `sched_hour_cos` | numeric | published flight schedule | known by T-60 |
+| `sched_dow_sin` | numeric | published flight schedule | known by T-60 |
+| `sched_dow_cos` | numeric | published flight schedule | known by T-60 |
+| `scheduled_duration_minutes` | numeric | published schedule + destination airport timezone | convert scheduled New York departure and destination-local scheduled arrival to UTC; known by T-60 |
+| `origin_scheduled_hour_volume` | numeric | published flight schedule | known by T-60 |
+| `origin_airport_lat` | numeric | airports reference | static reference joined by scheduled origin/destination |
+| `origin_airport_lon` | numeric | airports reference | static reference joined by scheduled origin/destination |
+| `origin_airport_alt` | numeric | airports reference | static reference joined by scheduled origin/destination |
+| `destination_airport_lat` | numeric | airports reference | static reference joined by scheduled origin/destination |
+| `destination_airport_lon` | numeric | airports reference | static reference joined by scheduled origin/destination |
+| `destination_airport_alt` | numeric | airports reference | static reference joined by scheduled origin/destination |
+| `temp` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `dewp` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `humid` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `wind_dir` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `wind_speed` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `wind_gust` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `precip` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `pressure` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `visib` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `weather_stale_or_missing` | numeric | weather | latest origin observation at/before T-60, maximum age 180 minutes |
+| `carrier_prior_count` | numeric | label history | training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60 |
+| `carrier_delay_rate` | numeric | label history | training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60 |
+| `carrier_history_missing` | numeric | label history | training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60 |
+| `route_prior_count` | numeric | label history | training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60 |
+| `route_delay_rate` | numeric | label history | training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60 |
+| `route_history_missing` | numeric | label history | training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60 |
 
-- `dep_time` (strictly prohibited; leakage-prone)
-- `dep_delay` (strictly prohibited; leakage-prone)
-- `arr_time` (strictly prohibited; leakage-prone)
-- `arr_delay` (strictly prohibited; leakage-prone)
-- `air_time` (strictly prohibited; leakage-prone)
-- `tailnum` (strictly prohibited; leakage-prone)
+## Limits
+
+- Weather values are retrospective observations, not archived forecast vintages.
+- Historical rates are frozen to training-date outcomes after 2013-08-31 so validation/test labels never become features.
+- Historical arrival availability is conservatively estimated from scheduled NYC departure plus 24 hours and positive arrival delay; no release timestamp is supplied.
+- Aircraft/tail-number features are excluded because assignment availability at T-60 is not established.

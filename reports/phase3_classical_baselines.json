@@ -1,12 +1,17 @@
 {
   "phase": 3,
-  "run_id": "phase3-2e8b0f36f940",
-  "generated_at": "2026-10-28T05:49:29+00:00",
+  "run_id": "phase3-73f033b69a9f",
+  "generated_at": "2026-10-28T10:42:04+00:00",
   "test_policy": "test labels not used for fitting, tuning, or Phase 3 metrics; Phase 5 owns final test evaluation",
   "rows": {
     "train": 217727,
     "validation": 55628,
     "test_sealed": 53991
+  },
+  "xgboost_tuning_window": {
+    "start": "2013-09-01",
+    "end": "2013-09-24",
+    "rows": 21493
   },
   "target_prevalence": {
     "train": 0.26373853495432353,
@@ -102,9 +107,9 @@
     "xgboost": "3.4.1"
   },
   "random_seed": 42,
-  "feature_manifest_version": "2.0.0",
-  "feature_manifest_sha256": "128b495da34cd52ecf14f83ddaa497e18b64999e11a87b5f020584aefac51d00",
-  "feature_table_sha256": "3db468f5eb530f3a9865a45ceed75acfae5ac467188406e73bdc3aeb54e4a519",
+  "feature_manifest_version": "2.2.0",
+  "feature_manifest_sha256": "bf461f00978c9369de36b1847a1bf1ac9a248fa5f12664b4e582ac26c87d3e3b",
+  "feature_table_sha256": "fc1e2319664537b87e0947de4013ef53413e0320ecb8ace31a0d7ded8fcd0faf",
   "split_manifest_version": "1.0.0",
   "split_contract": {
     "type": "chronological",
@@ -119,7 +124,8 @@
     "distribution_shift_note": "Labelled positive prevalence is 26.4% (train), 15.7% (validation) and 25.8% (test); September (13.7%) and December (33.5%) are the seasonal trough/peak. Boundaries were kept as proposed because changing them to balance prevalence would be outcome-driven; the shift must be disclosed in every evaluation report and prevalence reported alongside all metrics.\n",
     "change_policy": "Any boundary change must be documented with rationale in this file before model comparison begins, and never after viewing final test results.\n"
   },
-  "code_commit": "e09ac744e310bd80c5e4a2c52ffbdc8714493557",
+  "code_commit": "5f7f1989cf33a35e9c914f5d181499bdddc2ea8f",
+  "code_sha256": "e00a1ae69d9e222948b0a9346021c43f4c160d1d068d2e29e76214c514656b8c",
   "models": {
     "logistic_regression": {
       "settings": {
@@ -131,9 +137,9 @@
         "class_weight": null
       },
       "validation_metrics": {
-        "pr_auc": 0.3188625278905313,
-        "roc_auc": 0.6815179558947709,
-        "brier_score": 0.1332879369890279
+        "pr_auc": 0.3235103729559354,
+        "roc_auc": 0.6879480387946392,
+        "brier_score": 0.13792646569314135
       }
     },
     "xgboost": {
@@ -145,11 +151,11 @@
         "colsample_bytree": 0.9,
         "min_child_weight": 5
       },
-      "selection_metric": "validation PR AUC",
+      "selection_metric": "Sep 1\u201324 validation PR AUC",
       "validation_metrics": {
-        "pr_auc": 0.29958180160647163,
-        "roc_auc": 0.6713920444047228,
-        "brier_score": 0.12467697262763977
+        "pr_auc": 0.2913857409605977,
+        "roc_auc": 0.6625518493415488,
+        "brier_score": 0.12598881125450134
       },
       "trials": [
         {
@@ -163,9 +169,9 @@
             "min_child_weight": 5
           },
           "validation_metrics": {
-            "pr_auc": 0.29958180160647163,
-            "roc_auc": 0.6713920444047228,
-            "brier_score": 0.12467697262763977
+            "pr_auc": 0.3629414916714855,
+            "roc_auc": 0.7052407257353874,
+            "brier_score": 0.11573081463575363
           }
         },
         {
@@ -179,9 +185,9 @@
             "min_child_weight": 5
           },
           "validation_metrics": {
-            "pr_auc": 0.2961545322195722,
-            "roc_auc": 0.675723081456127,
-            "brier_score": 0.1243562176823616
+            "pr_auc": 0.3497370708437265,
+            "roc_auc": 0.7065375479326839,
+            "brier_score": 0.11501031368970871
           }
         }
       ]

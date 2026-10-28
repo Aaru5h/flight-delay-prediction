@@ -5,15 +5,18 @@ import pytest
 
 from src.features.history import add_historical_features
 from src.features.manifest import ALLOWLIST, DENYLIST
+from src.features.pipeline import build_feature_table
 from src.features.schedule import join_reference_features
 from src.features.weather import join_weather_asof
 
 
 def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", label=0):
+    departure = pd.Timestamp(f"{date} {local_time}")
     return {
         "flight_row_id": row_id,
         "sched_date": pd.Timestamp(date),
-        "sched_dep_ts": pd.Timestamp(f"{date} {local_time}"),
+        "sched_dep_ts": departure,
+        "actual_arr_utc": departure.tz_localize("America/New_York").tz_convert("UTC") + pd.Timedelta(hours=2),
         "carrier": carrier,
         "origin": origin,
         "dest": dest,
@@ -101,6 +104,7 @@ def test_historical_timing_excludes_arrivals_after_cutoff():
             "sched_dep_ts": pd.Timestamp("2013-01-01 10:00:00"),
             "sched_arr_ts": pd.Timestamp("2013-01-01 12:00:00"),
             "arr_delay": 0.0,
+            "actual_arr_utc": pd.Timestamp("2013-01-01 12:00", tz="America/New_York").tz_convert("UTC"),
             "carrier": "AA",
             "origin": "EWR",
             "dest": "ORD",
@@ -112,6 +116,7 @@ def test_historical_timing_excludes_arrivals_after_cutoff():
             "sched_dep_ts": pd.Timestamp("2013-01-01 23:00:00"),
             "sched_arr_ts": pd.Timestamp("2013-01-02 02:00:00"),
             "arr_delay": 240.0,  # Lands Jan 2 at 06:00!
+            "actual_arr_utc": pd.Timestamp("2013-01-02 06:00", tz="America/New_York").tz_convert("UTC"),
             "carrier": "AA",
             "origin": "EWR",
             "dest": "SFO",
@@ -123,6 +128,7 @@ def test_historical_timing_excludes_arrivals_after_cutoff():
             "sched_dep_ts": pd.Timestamp("2013-01-02 05:00:00"),  # Cutoff is 04:00
             "sched_arr_ts": pd.Timestamp("2013-01-02 08:00:00"),
             "arr_delay": 0.0,
+            "actual_arr_utc": pd.Timestamp("2013-01-02 08:00", tz="America/New_York").tz_convert("UTC"),
             "carrier": "AA",
             "origin": "EWR",
             "dest": "ORD",
@@ -133,3 +139,69 @@ def test_historical_timing_excludes_arrivals_after_cutoff():
     # For target flight, carrier prior count should only be 1 (Flight 1), NOT 2!
     assert out.loc["target", "carrier_prior_count"] == 1
     assert out.loc["target", "carrier_delay_rate"] is not pd.NA
+
+
+def test_unavailable_other_carrier_label_cannot_change_smoothed_rate():
+    flights = pd.DataFrame([
+        _flight("known", "2013-01-01", "10:00", carrier="AA", label=0),
+        _flight("late", "2013-01-01", "23:00", carrier="BB", label=1),
+        _flight("target", "2013-01-02", "05:00", carrier="AA", label=0),
+    ])
+    flights.loc[flights.flight_row_id.eq("late"), "actual_arr_utc"] = pd.Timestamp("2013-01-02 11:00", tz="UTC")
+    first = add_historical_features(flights).set_index("flight_row_id")
+    changed = flights.copy()
+    changed.loc[changed.flight_row_id.eq("late"), "substantial_delay"] = 0
+    second = add_historical_features(changed).set_index("flight_row_id")
+    assert first.loc["target", "carrier_delay_rate"] == second.loc["target", "carrier_delay_rate"]
+
+
+def test_source_arrival_bound_withholds_previous_day_outcome():
+    flights = pd.DataFrame([
+        {**_flight("prior", "2013-01-01", "23:00", label=1), "arr_delay": 240.0},
+        {**_flight("target", "2013-01-02", "05:00", label=0), "arr_delay": 0.0},
+    ]).drop(columns="actual_arr_utc")
+    out = add_historical_features(flights).set_index("flight_row_id")
+    assert out.loc["target", "carrier_prior_count"] == 0
+
+
+def test_validation_labels_do_not_feed_later_validation_features():
+    flights = pd.DataFrame([
+        _flight("train", "2013-08-30", "10:00", label=0),
+        _flight("validation_early", "2013-09-02", "10:00", label=1),
+        _flight("validation_late", "2013-09-05", "10:00", label=0),
+    ])
+    first = add_historical_features(flights, history_training_end="2013-08-31").set_index("flight_row_id")
+    changed = flights.copy()
+    changed.loc[changed.flight_row_id.eq("validation_early"), "substantial_delay"] = 0
+    second = add_historical_features(changed, history_training_end="2013-08-31").set_index("flight_row_id")
+    assert first.loc["validation_late", "carrier_prior_count"] == 1
+    assert first.loc["validation_late", "carrier_delay_rate"] == second.loc["validation_late", "carrier_delay_rate"]
+
+
+def test_scheduled_volume_includes_unknown_label_flights():
+    from types import SimpleNamespace
+    flights = pd.DataFrame([
+        dict(flight_row_id="known", sched_date="2013-01-01", sched_dep_ts="2013-01-01 10:00", sched_arr_ts="2013-01-01 12:00", sched_dep_minute=600, sched_arr_minute=720, carrier="AA", origin="EWR", dest="LAX", distance=2400, arr_delay=0, substantial_delay=0, label_status="known"),
+        dict(flight_row_id="unknown", sched_date="2013-01-01", sched_dep_ts="2013-01-01 10:30", sched_arr_ts="2013-01-01 12:30", sched_dep_minute=630, sched_arr_minute=750, carrier="AA", origin="EWR", dest="LAX", distance=2400, arr_delay=None, substantial_delay=None, label_status="unknown"),
+    ])
+    wx = pd.DataFrame([dict(origin="EWR", time_hour="2013-01-01T14:00:00Z", **{name: 0 for name in ["temp", "dewp", "humid", "wind_dir", "wind_speed", "wind_gust", "precip", "pressure", "visib"]})])
+    airports = pd.DataFrame({"faa": ["EWR", "LAX"], "name": ["Newark", "Los Angeles"], "lat": [40.7, 34.0], "lon": [-74.2, -118.4], "alt": [18, 125], "tz": [-5, -8]})
+    sources = {"airlines": SimpleNamespace(df=pd.DataFrame({"carrier": ["AA"], "name": ["American"]})), "airports": SimpleNamespace(df=airports), "weather": SimpleNamespace(df=wx)}
+    out, _ = build_feature_table(flights, sources)
+    assert len(out) == 1
+    assert out.iloc[0].origin_scheduled_hour_volume == 2
+
+
+def test_scheduled_duration_uses_destination_timezone():
+    from src.features.schedule import add_schedule_features
+    flights = pd.DataFrame([dict(flight_row_id="a", sched_date=pd.Timestamp("2013-01-01"), sched_dep_ts=pd.Timestamp("2013-01-01 05:15"), sched_dep_minute=315, sched_arr_minute=499, carrier="UA", origin="EWR", dest="IAH")])
+    airports = pd.DataFrame({"faa": ["EWR", "IAH"], "name": ["Newark", "Houston"], "lat": [40.7, 30.0], "lon": [-74.2, -95.3], "alt": [18, 97], "tz": [-5, -6], "tzone": ["America/New_York", "America/Chicago"]})
+    airlines = pd.DataFrame({"carrier": ["UA"], "name": ["United"]})
+    out, _ = join_reference_features(add_schedule_features(flights), airlines, airports)
+    assert out.iloc[0].scheduled_duration_minutes == 244
+    overnight = flights.copy()
+    overnight["sched_dep_ts"] = pd.Timestamp("2013-01-01 23:00")
+    overnight["sched_dep_minute"] = 1380
+    overnight["sched_arr_minute"] = 30
+    next_day, _ = join_reference_features(add_schedule_features(overnight), airlines, airports)
+    assert next_day.iloc[0].scheduled_duration_minutes == 150

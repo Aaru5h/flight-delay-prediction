@@ -86,7 +86,7 @@ def plot_pr_and_roc_curves(
     output_path: Path,
 ) -> None:
     """Plot Precision-Recall and ROC curves."""
-    from sklearn.metrics import precision_recall_curve, roc_curve, auc
+    from sklearn.metrics import precision_recall_curve, roc_curve, auc, average_precision_score
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig, (ax_pr, ax_roc) = plt.subplots(1, 2, figsize=(14, 6))
@@ -108,7 +108,7 @@ def plot_pr_and_roc_curves(
         color = colors.get(name, "#2ca02c")
 
         prec, rec, _ = precision_recall_curve(y_true, y_prob)
-        pr_auc = auc(rec, prec)
+        pr_auc = average_precision_score(y_true, y_prob)
         ax_pr.plot(
             rec,
             prec,

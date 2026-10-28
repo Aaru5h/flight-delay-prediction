@@ -57,6 +57,7 @@ The following rules apply:
 - Actual departure time, departure delay, actual arrival time, arrival delay, and air time are post-departure outcomes and cannot be model inputs.
 - Use the latest origin-airport weather observation timestamped no later than T−60. For the initial design, reject an observation if it is more than three hours older than the cutoff. Historical observations are not weather forecasts; that limitation must be acknowledged.
 - Historical delay/congestion features may use only flights from dates strictly before the target flight's date. Same-day outcomes and the target flight itself are excluded.
+- In the current AML experiment, historical outcomes are restricted to the training period and withheld until a conservative completion bound (scheduled NYC departure + 24 hours + positive arrival delay) precedes T−60. The source does not include outcome release timestamps.
 - Treat `tailnum` as unavailable unless the team can justify that the assigned aircraft was known at T−60. Do not use it merely because it appears in the CSV.
 
 ## 6. Models and evaluation
@@ -171,20 +172,20 @@ python -m src.models.classical.train
 ```
 
 The command fits preprocessing and models on the training window only, selects
-the XGBoost candidate by validation PR AUC, and writes reloadable pipelines,
+the XGBoost candidate by Sep 1–24 validation PR AUC, and writes reloadable pipelines,
 the split manifest, metadata, and validation prediction files under
 `artifacts/classical/`. Test labels are deliberately not scored in Phase 3;
 Phase 5 owns the final held-out evaluation.
 
 ### AML evaluation and calibration (Phase 5)
 
-Run the full Phase 5 evaluation across validation threshold selection, probability calibration diagnostics, and held-out test scoring:
+After rebuilding Phase 2 and Phase 3 artifacts, run Phase 5 evaluation:
 
 ```bash
 python -m src.evaluation.evaluate_aml
 ```
 
-This freezes the validation-tuned decision thresholds, generates reliability diagrams and PR/ROC curves under `reports/figures/`, exports scored test predictions to `artifacts/predictions/`, and produces:
+This fits calibration on Sep 25–Oct 12, assesses it and selects thresholds on Oct 13–31, then applies those decisions to the same held-out test population for both models. The exploratory 35% precision floor requires at least 5% validation recall and 100 alerts; the current run finds it feasible for Logistic Regression and infeasible for XGBoost, and reports a separate validation-selected F1 reference. Previous repository work already viewed test results, so this comparison is retrospective rather than a pristine first holdout. The command generates reliability diagrams and PR/ROC curves under `reports/figures/`, exports scored test predictions and model bundles to `artifacts/predictions/`, and produces:
 - Full evaluation benchmark: [reports/phase5_aml_evaluation.md](reports/phase5_aml_evaluation.md)
 - In-depth gap analysis: [reports/identify_the_gap.md](reports/identify_the_gap.md)
 

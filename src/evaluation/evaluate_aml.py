@@ -1,12 +1,14 @@
-"""Phase 5 AML Evaluation Engine: threshold selection, calibration, and test evaluation.
+"""Reproducible Phase 5 AML evaluation of frozen Phase 3 pipelines.
 
-Usage:
-    python -m src.evaluation.evaluate_aml
+Validation is divided chronologically: Sep 1–24 for Phase 3 XGBoost tuning,
+Sep 25–Oct 12 for calibrator fitting, and Oct 13–31 for calibration assessment
+and operating-threshold selection. Test labels never enter those decisions.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,23 +16,71 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.metrics import brier_score_loss
 
 from src.data import config as data_config
-from src.evaluation.calibration import (
-    fit_probability_calibrator,
-    plot_pr_and_roc_curves,
-    plot_reliability_diagrams,
-)
+from src.evaluation.calibration import fit_probability_calibrator, plot_pr_and_roc_curves, plot_reliability_diagrams
 from src.evaluation.metrics import evaluate_predictions
 from src.evaluation.threshold import select_operating_thresholds
+from src.models.classical.train import assign_split
 
 ROOT = data_config.PROJECT_ROOT
 FEATURE_TABLE = data_config.PROCESSED_DATA_DIR / "phase2_features.csv"
 FEATURE_MANIFEST = data_config.PROCESSED_DATA_DIR / "phase2_feature_manifest.json"
-CLASSICAL_ARTIFACTS = ROOT / "artifacts" / "classical"
-EVALUATION_ARTIFACTS = ROOT / "artifacts" / "predictions"
+CLASSICAL_ARTIFACTS = ROOT / "artifacts/classical"
+EVALUATION_ARTIFACTS = ROOT / "artifacts/predictions"
 REPORTS_DIR = data_config.REPORTS_DIR
 FIGURES_DIR = REPORTS_DIR / "figures"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _check_inputs(feature_path: Path, manifest_path: Path, artifacts_dir: Path):
+    manifest = json.loads(manifest_path.read_text())
+    metadata = json.loads((artifacts_dir / "run_metadata.json").read_text())
+    if _sha256(feature_path) != metadata["feature_table_sha256"]:
+        raise ValueError("Phase 3 model artifact does not match this feature table")
+    if manifest["manifest_sha256"] != metadata["feature_manifest_sha256"]:
+        raise ValueError("Phase 3 model artifact does not match this feature manifest")
+    df = pd.read_csv(feature_path, low_memory=False)
+    split = pd.read_csv(artifacts_dir / "split_manifest.csv", usecols=["flight_row_id", "sched_date", "split"])
+    if df.flight_row_id.duplicated().any() or split.flight_row_id.duplicated().any():
+        raise ValueError("duplicate flight IDs")
+    if set(df.flight_row_id) != set(split.flight_row_id):
+        raise ValueError("split manifest and feature table contain different flights")
+    df = df.merge(split, on="flight_row_id", how="left", validate="one_to_one", suffixes=("", "_split"))
+    if not (df.sched_date == df.sched_date_split).all() or not (df.split == assign_split(df.sched_date)).all():
+        raise ValueError("split manifest date or assignment mismatch")
+    if df.substantial_delay.isna().any() or df["split"].isna().any():
+        raise ValueError("unknown labels or split assignments")
+    return df, manifest, metadata
+
+
+def _prediction_frame(ids, labels, probabilities, model_name, run_id, threshold):
+    out = pd.DataFrame({
+        "flight_row_id": ids.to_numpy(), "y_true": labels,
+        "y_probability": probabilities, "y_pred": (probabilities >= threshold).astype(int),
+        "split": "test", "model_name": model_name, "run_id": run_id,
+    })
+    if out.flight_row_id.duplicated().any() or not np.isfinite(out.y_probability).all() or not out.y_probability.between(0, 1).all():
+        raise ValueError("invalid test prediction artifact")
+    return out
+
+
+def _verify_saved_validation(path: Path, val: pd.DataFrame, probability: np.ndarray, run_id: str) -> None:
+    saved = pd.read_csv(path)
+    expected = pd.DataFrame({"flight_row_id": val.flight_row_id.to_numpy(), "y_true": val.substantial_delay.to_numpy(dtype=int), "probability": probability})
+    if saved.flight_row_id.duplicated().any() or len(saved) != len(expected) or set(saved.run_id) != {run_id} or set(saved.split) != {"validation"}:
+        raise ValueError(f"stale validation prediction artifact: {path}")
+    joined = expected.merge(saved, on="flight_row_id", validate="one_to_one")
+    if len(joined) != len(expected) or not np.array_equal(joined.y_true_x, joined.y_true_y) or not np.allclose(joined.probability, joined.y_probability, atol=1e-6, rtol=0):
+        raise ValueError(f"saved validation predictions do not match model: {path}")
 
 
 def run_aml_evaluation(
@@ -40,290 +90,136 @@ def run_aml_evaluation(
     eval_artifacts_dir: Path = EVALUATION_ARTIFACTS,
     reports_dir: Path = REPORTS_DIR,
     figures_dir: Path = FIGURES_DIR,
-    precision_floor: float = 0.70,
+    precision_floor: float = 0.35,
 ) -> dict:
-    """Run Phase 5 evaluation on validation and held-out test splits."""
-    print("=" * 70)
-    print("Phase 5 — Applied Machine Learning Evaluation and Calibration")
-    print("=" * 70)
-
-    # 1. Load feature table and manifest
-    if not feature_path.exists():
-        raise FileNotFoundError(f"Feature table missing: {feature_path}")
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Feature manifest missing: {manifest_path}")
-
-    print("Loading feature matrix and manifest...")
-    manifest = json.loads(manifest_path.read_text())
+    """Fit validation calibrators, freeze decisions, and score a common test set."""
+    feature_path, manifest_path, artifacts_dir = map(Path, (feature_path, manifest_path, artifacts_dir))
+    eval_artifacts_dir, reports_dir, figures_dir = map(Path, (eval_artifacts_dir, reports_dir, figures_dir))
+    df, manifest, metadata = _check_inputs(feature_path, manifest_path, artifacts_dir)
+    val = df.loc[df.split.eq("validation")].copy()
+    test = df.loc[df.split.eq("test")].copy()
+    val_dates = pd.to_datetime(val.sched_date, utc=True)
+    cal = val_dates.ge(pd.Timestamp("2013-09-25", tz="UTC")) & val_dates.lt(pd.Timestamp("2013-10-13", tz="UTC"))
+    assess = val_dates.ge(pd.Timestamp("2013-10-13", tz="UTC"))
+    if not cal.any() or not assess.any() or metadata.get("xgboost_tuning_window", {}).get("end") != "2013-09-24":
+        raise ValueError("Phase 3 model was not selected on the reserved tuning window")
     allowlist = manifest["allowlist"]
-    df = pd.read_csv(feature_path, low_memory=False)
-
-    # Split assignment
-    split_manifest_path = artifacts_dir / "split_manifest.csv"
-    if split_manifest_path.exists():
-        split_df = pd.read_csv(split_manifest_path)
-        df = df.merge(split_df[["flight_row_id", "split"]], on="flight_row_id", how="left")
-    else:
-        dates = pd.to_datetime(df["sched_date"], errors="raise", utc=True).dt.tz_localize(None)
-        split = np.select(
-            [dates <= pd.Timestamp("2013-08-31"), dates <= pd.Timestamp("2013-10-31")],
-            ["train", "validation"],
-            default="test",
-        )
-        df["split"] = split
-
-    val_df = df[df["split"] == "validation"].copy()
-    test_df = df[df["split"] == "test"].copy()
-
-    print(f"Validation flights: {len(val_df):,} (prevalence: {val_df['substantial_delay'].mean():.4f})")
-    print(f"Held-out test flights: {len(test_df):,} (prevalence: {test_df['substantial_delay'].mean():.4f})")
-
-    # 2. Load trained classical models
-    lr_path = artifacts_dir / "logistic_regression.joblib"
-    xgb_path = artifacts_dir / "xgboost.joblib"
-    if not lr_path.exists() or not xgb_path.exists():
-        raise FileNotFoundError("Trained model pipelines not found. Run 'python -m src.models.classical.train' first.")
-
-    print("Loading trained pipelines (Logistic Regression and XGBoost)...")
-    lr_model = joblib.load(lr_path)
-    xgb_model = joblib.load(xgb_path)
-
-    X_val = val_df[allowlist]
-    y_val = val_df["substantial_delay"].astype(int).values
-
-    X_test = test_df[allowlist]
-    y_test = test_df["substantial_delay"].astype(int).values
-
-    # 3. Generate validation probabilities
-    print("\n--- Step 1: Validation Evaluation & Threshold Selection ---")
-    val_probs = {
-        "Logistic Regression": lr_model.predict_proba(X_val)[:, 1],
-        "XGBoost": xgb_model.predict_proba(X_val)[:, 1],
+    models = {
+        "Logistic Regression": joblib.load(artifacts_dir / "logistic_regression.joblib"),
+        "XGBoost": joblib.load(artifacts_dir / "xgboost.joblib"),
     }
-
-    val_threshold_decisions = {}
-    val_metrics_report = {}
-    fitted_calibrators = {}
-
-    for name, p_val in val_probs.items():
-        # Select operating threshold strictly on validation data
-        decisions = select_operating_thresholds(
-            y_val=y_val,
-            y_val_prob=p_val,
-            precision_floor=precision_floor,
-            split_name="validation",
-        )
-        val_threshold_decisions[name] = decisions
-
-        # Evaluate at selected thresholds
-        thresh_floor = decisions["precision_requirement"]["threshold"]
-        thresh_f1 = decisions["best_f1_requirement"]["threshold"]
-
-        eval_default = evaluate_predictions(y_val, p_val, threshold=0.50)
-        eval_floor = evaluate_predictions(y_val, p_val, threshold=thresh_floor)
-        eval_f1 = evaluate_predictions(y_val, p_val, threshold=thresh_f1)
-
-        # Calibration check & optional fit
-        calibrator = fit_probability_calibrator(y_val, p_val)
-        p_val_cal = calibrator.predict(p_val)
-        brier_raw = eval_default["brier_score"]
-        brier_cal = float(np.mean((p_val_cal - y_val) ** 2))
-        fitted_calibrators[name] = calibrator
-
-        val_metrics_report[name] = {
-            "default_0_50": eval_default,
-            "at_precision_floor": eval_floor,
-            "at_best_f1": eval_f1,
+    y_val = val.substantial_delay.to_numpy(dtype=int)
+    val_results, decisions, frozen = {}, {}, {}
+    selected_val = {}
+    for name, model in models.items():
+        raw = model.predict_proba(val[allowlist])[:, 1]
+        slug = name.lower().replace(" ", "_")
+        saved_name = "logistic_validation_predictions.csv" if name == "Logistic Regression" else "xgboost_validation_predictions.csv"
+        _verify_saved_validation(artifacts_dir / saved_name, val, raw, metadata["run_id"])
+        calibrator = fit_probability_calibrator(y_val[cal], raw[cal])
+        calibrated = calibrator.predict(raw[assess])
+        raw_brier = float(brier_score_loss(y_val[assess], raw[assess]))
+        calibrated_brier = float(brier_score_loss(y_val[assess], calibrated))
+        # A meaningful improvement on a separate validation slice is required.
+        use_calibrated = calibrated_brier < raw_brier - 0.001
+        chosen = calibrated if use_calibrated else raw[assess]
+        decision = select_operating_thresholds(y_val[assess], chosen, precision_floor=precision_floor)
+        selected_val[name] = (y_val[assess], chosen)
+        decisions[name] = decision
+        val_results[name] = {
+            "full_validation_raw": evaluate_predictions(y_val, raw),
+            "assessment_selected": evaluate_predictions(y_val[assess], chosen, decision["best_f1_requirement"]["threshold"]),
             "calibration": {
-                "brier_score_raw": brier_raw,
-                "brier_score_calibrated": round(brier_cal, 4),
-                "calibration_improves_brier": bool(brier_cal < brier_raw),
+                "fit_rows": int(cal.sum()), "assessment_rows": int(assess.sum()),
+                "assessment_brier_raw": raw_brier, "assessment_brier_isotonic": calibrated_brier,
+                "selected": "isotonic" if use_calibrated else "raw",
             },
         }
+        frozen[name] = {"model": model, "calibrator": calibrator if use_calibrated else None, "thresholds": decision}
 
-        print(f"[{name}] Validation PR-AUC: {eval_default['pr_auc']:.4f} | ROC-AUC: {eval_default['roc_auc']:.4f} | Brier: {eval_default['brier_score']:.4f}")
-        print(f"  Exploratory Floor ({precision_floor:.0%}) -> Threshold: {thresh_floor:.4f} | Precision: {eval_floor['precision']:.4f} | Recall: {eval_floor['recall']:.4f}")
-        print(f"  Best F1 -> Threshold: {thresh_f1:.4f} | F1: {eval_f1['f1']:.4f} | Precision: {eval_f1['precision']:.4f} | Recall: {eval_f1['recall']:.4f}")
-
-    # Generate validation figures
-    figures_dir.mkdir(parents=True, exist_ok=True)
-    val_diagram_data = {name: (y_val, p) for name, p in val_probs.items()}
-    plot_reliability_diagrams(val_diagram_data, "Validation Set (Sep–Oct 2013)", figures_dir / "validation_reliability_diagram.png")
-    plot_pr_and_roc_curves(val_diagram_data, "Validation Set (Sep–Oct 2013)", figures_dir / "validation_pr_roc_curves.png")
-
-    # 4. Freeze decisions and evaluate on held-out test set
-    print("\n--- Step 2: Frozen Evaluation on Held-Out Test Set (Nov–Dec 2013) ---")
-    test_probs = {
-        "Logistic Regression": lr_model.predict_proba(X_test)[:, 1],
-        "XGBoost": xgb_model.predict_proba(X_test)[:, 1],
-    }
-
-    test_metrics_report = {}
+    # All fitting and selection above is complete before test outcomes are read.
+    y_test = test.substantial_delay.to_numpy(dtype=int)
+    test_results, selected_test = {}, {}
     eval_artifacts_dir.mkdir(parents=True, exist_ok=True)
-
-    for name, p_test in test_probs.items():
-        decisions = val_threshold_decisions[name]
-        thresh_floor = decisions["precision_requirement"]["threshold"]
-        thresh_f1 = decisions["best_f1_requirement"]["threshold"]
-
-        eval_default = evaluate_predictions(y_test, p_test, threshold=0.50)
-        eval_floor = evaluate_predictions(y_test, p_test, threshold=thresh_floor)
-        eval_f1 = evaluate_predictions(y_test, p_test, threshold=thresh_f1)
-
-        test_metrics_report[name] = {
-            "default_0_50": eval_default,
-            "at_precision_floor": eval_floor,
-            "at_best_f1": eval_f1,
+    for name, bundle in frozen.items():
+        raw = bundle["model"].predict_proba(test[allowlist])[:, 1]
+        probs = bundle["calibrator"].predict(raw) if bundle["calibrator"] is not None else raw
+        decision = bundle["thresholds"]
+        f1_threshold = decision["best_f1_requirement"]["threshold"]
+        floor_threshold = decision["precision_requirement"]["threshold"]
+        test_results[name] = {
+            "at_best_f1": evaluate_predictions(y_test, probs, f1_threshold),
+            "at_precision_floor": evaluate_predictions(y_test, probs, floor_threshold) if floor_threshold is not None else None,
         }
-
-        print(f"[{name}] Test PR-AUC: {eval_default['pr_auc']:.4f} | ROC-AUC: {eval_default['roc_auc']:.4f} | Brier: {eval_default['brier_score']:.4f}")
-        print(f"  At Frozen Precision Floor ({thresh_floor:.4f}) -> Test Precision: {eval_floor['precision']:.4f} | Test Recall: {eval_floor['recall']:.4f}")
-        print(f"  At Frozen Best F1 ({thresh_f1:.4f}) -> Test F1: {eval_f1['f1']:.4f} | Test Precision: {eval_f1['precision']:.4f} | Test Recall: {eval_f1['recall']:.4f}")
-
-        # Export prediction files
+        selected_test[name] = (y_test, probs)
         slug = name.lower().replace(" ", "_")
-        pred_df = pd.DataFrame({
-            "flight_row_id": test_df["flight_row_id"],
-            "y_true": y_test,
-            "y_probability": np.round(p_test, 6),
-            "y_pred_f1": (p_test >= thresh_f1).astype(int),
-            "y_pred_floor": (p_test >= thresh_floor).astype(int),
-            "split": "test",
-            "model_name": slug,
-            "run_id": "phase5-aml-evaluation",
-        })
-        pred_df.to_csv(eval_artifacts_dir / f"{slug}_test_predictions.csv", index=False)
+        _prediction_frame(test.flight_row_id, y_test, probs, slug, metadata["run_id"], f1_threshold).to_csv(eval_artifacts_dir / f"{slug}_test_predictions.csv", index=False)
+        joblib.dump({"model": bundle["model"], "calibrator": bundle["calibrator"], "thresholds": decision}, eval_artifacts_dir / f"{slug}_scorer.joblib")
 
-    # Generate test figures
-    test_diagram_data = {name: (y_test, p) for name, p in test_probs.items()}
-    plot_reliability_diagrams(test_diagram_data, "Held-Out Test Set (Nov–Dec 2013)", figures_dir / "test_reliability_diagram.png")
-    plot_pr_and_roc_curves(test_diagram_data, "Held-Out Test Set (Nov–Dec 2013)", figures_dir / "test_pr_roc_curves.png")
-
-    # 5. Build full evaluation report
-    report_data = {
-        "evaluation_phase": 5,
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "precision_floor_candidate": precision_floor,
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    plot_reliability_diagrams(selected_val, "Validation assessment (Oct 13–31)", figures_dir / "validation_reliability_diagram.png")
+    plot_pr_and_roc_curves(selected_val, "Validation assessment (Oct 13–31)", figures_dir / "validation_pr_roc_curves.png")
+    plot_reliability_diagrams(selected_test, "Test (Nov–Dec)", figures_dir / "test_reliability_diagram.png")
+    plot_pr_and_roc_curves(selected_test, "Test (Nov–Dec)", figures_dir / "test_pr_roc_curves.png")
+    report = {
+        "evaluation_phase": 5, "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "phase3_run_id": metadata["run_id"], "feature_table_sha256": _sha256(feature_path),
+        "model_sha256": {"Logistic Regression": _sha256(artifacts_dir / "logistic_regression.joblib"), "XGBoost": _sha256(artifacts_dir / "xgboost.joblib")},
+        "evaluation_code_sha256": _sha256(Path(__file__)),
+        "feature_manifest_sha256": manifest["manifest_sha256"],
+        "precision_floor": precision_floor, "floor_status": "exploratory; not stakeholder approved",
+        "holdout_status": "previous repository test results were viewed; this rerun is retrospective, not a pristine first test",
         "split_summary": {
-            "train_prevalence": 0.264,
-            "validation_rows": len(val_df),
-            "validation_prevalence": float(val_df["substantial_delay"].mean()),
-            "test_rows": len(test_df),
-            "test_prevalence": float(test_df["substantial_delay"].mean()),
+            "train_rows": int(df.split.eq("train").sum()), "tuning_rows": int((~cal & ~assess).sum()),
+            "calibration_rows": int(cal.sum()), "assessment_rows": int(assess.sum()),
+            "validation_rows": len(val), "test_rows": len(test),
+            "train_prevalence": float(df.loc[df.split.eq("train"), "substantial_delay"].mean()),
+            "validation_prevalence": float(np.mean(y_val)), "test_prevalence": float(np.mean(y_test)),
         },
-        "validation_decisions": val_threshold_decisions,
-        "validation_metrics": val_metrics_report,
-        "test_metrics": test_metrics_report,
-        "figures": {
-            "validation_reliability": str(figures_dir / "validation_reliability_diagram.png"),
-            "validation_curves": str(figures_dir / "validation_pr_roc_curves.png"),
-            "test_reliability": str(figures_dir / "test_reliability_diagram.png"),
-            "test_curves": str(figures_dir / "test_pr_roc_curves.png"),
-        },
+        "validation_decisions": decisions, "validation_metrics": val_results, "test_metrics": test_results,
+        "figures": {"validation_reliability": "reports/figures/validation_reliability_diagram.png", "validation_curves": "reports/figures/validation_pr_roc_curves.png", "test_reliability": "reports/figures/test_reliability_diagram.png", "test_curves": "reports/figures/test_pr_roc_curves.png"},
     }
-
-    # Save JSON report
     reports_dir.mkdir(parents=True, exist_ok=True)
-    json_path = reports_dir / "phase5_aml_evaluation.json"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(report_data, f, indent=2)
-
-    # Save Markdown report
-    md_path = reports_dir / "phase5_aml_evaluation.md"
-    _write_markdown_evaluation_report(report_data, md_path)
-
-    print(f"\nPhase 5 AML Evaluation complete. Reports saved to:")
-    print(f"- {json_path}")
-    print(f"- {md_path}")
-    print(f"- Figures in {figures_dir}")
-    print("=" * 70)
-    return report_data
+    (reports_dir / "phase5_aml_evaluation.json").write_text(json.dumps(report, indent=2) + "\n")
+    (reports_dir / "phase5_aml_evaluation.md").write_text(_evaluation_markdown(report))
+    (reports_dir / "identify_the_gap.md").write_text(_gap_markdown(report))
+    return report
 
 
-def _write_markdown_evaluation_report(data: dict, out_path: Path) -> None:
-    val_m = data["validation_metrics"]
-    test_m = data["test_metrics"]
-    val_prev = data["split_summary"]["validation_prevalence"]
-    test_prev = data["split_summary"]["test_prevalence"]
+def _evaluation_markdown(report: dict) -> str:
+    lines = ["# Phase 5 — AML evaluation", "", f"Run: `{report['phase3_run_id']}`; feature SHA-256: `{report['feature_table_sha256']}`.", "", f"The {report['precision_floor']:.0%} precision floor is exploratory, with at least 5% validation recall and 100 alerts required. The test period was already viewed in earlier repository work, so this is a retrospective evaluation, not a pristine first holdout.", "", "Validation uses Sep 1–24 for XGBoost tuning, Sep 25–Oct 12 to fit calibration, and Oct 13–31 to assess calibration and choose thresholds. Test outcomes do not affect these decisions.", "", "| Model | Full val PR-AUC (raw) | Full val ROC-AUC (raw) | Assessment Brier raw | Assessment Brier isotonic | Selected probabilities | Validation precision | Validation recall | Test PR-AUC | Test ROC-AUC | Test Brier | Test precision | Test recall |", "|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for name in ("Logistic Regression", "XGBoost"):
+        val, decision, test = report["validation_metrics"][name], report["validation_decisions"][name], report["test_metrics"][name]
+        c, f = val["calibration"], decision["precision_requirement"]
+        t = test["at_precision_floor"]
+        fmt = lambda x: f"{x:.4f}" if x is not None else "infeasible"
+        lines.append(f"| {name} | {val['full_validation_raw']['pr_auc']:.4f} | {val['full_validation_raw']['roc_auc']:.4f} | {c['assessment_brier_raw']:.4f} | {c['assessment_brier_isotonic']:.4f} | {c['selected']} | {fmt(f['validation_precision'])} | {fmt(f['validation_recall'])} | {test['at_best_f1']['pr_auc']:.4f} | {test['at_best_f1']['roc_auc']:.4f} | {test['at_best_f1']['brier_score']:.4f} | {fmt(t['precision'] if t else None)} | {fmt(t['recall'] if t else None)} |")
+    lines += ["", "## Validation-selected F1 reference", "", "| Model | Validation precision | Validation recall | Test precision | Test recall | Test F1 | Test false positives | Test false negatives |", "|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for name in ("Logistic Regression", "XGBoost"):
+        v = report["validation_metrics"][name]["assessment_selected"]
+        t = report["test_metrics"][name]["at_best_f1"]
+        lines.append(f"| {name} | {v['precision']:.4f} | {v['recall']:.4f} | {t['precision']:.4f} | {t['recall']:.4f} | {t['f1']:.4f} | {t['confusion_matrix']['fp']:,} | {t['confusion_matrix']['fn']:,} |")
+    lines += ["", f"The test precision and recall columns use the validation-selected {report['precision_floor']:.0%} floor threshold where feasible. Infeasible means no threshold met the floor plus the minimum recall and alert-count guards. See the JSON for F1 reference thresholds, confusion matrices, and exact decisions.", "", "Figures: [validation reliability](figures/validation_reliability_diagram.png), [validation PR/ROC](figures/validation_pr_roc_curves.png), [test reliability](figures/test_reliability_diagram.png), [test PR/ROC](figures/test_pr_roc_curves.png).", ""]
+    return "\n".join(lines)
 
-    lines = [
-        "# Phase 5 — Applied Machine Learning (AML) Evaluation Report",
-        "",
-        "## 1. Executive Summary & Split Prevalences",
-        "",
-        f"- **Validation Period (Sep 1 – Oct 31, 2013):** {data['split_summary']['validation_rows']:,} flights, positive delay prevalence: **{val_prev:.2%}**.",
-        f"- **Held-Out Test Period (Nov 1 – Dec 31, 2013):** {data['split_summary']['test_rows']:,} flights, positive delay prevalence: **{test_prev:.2%}**.",
-        "- **Seasonal Shift:** Delay prevalence drops to an autumn lull (15.7%) in validation, then surges to 25.8% in winter test (December peak reaches 33.5%).",
-        "",
-        "## 2. Validation Performance & Threshold Selection",
-        "",
-        "All thresholds were chosen on **validation data only**:",
-        "",
-        "| Model | PR-AUC | ROC-AUC | Brier Score | ECE | Best F1 Thresh | Val F1 | Floor (70%) Thresh | Val Prec @ Floor | Val Recall @ Floor |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
-    ]
 
-    for model in ["Logistic Regression", "XGBoost"]:
-        vm = val_m[model]
-        vd = data["validation_decisions"][model]
-        f1_thresh = vd["best_f1_requirement"]["threshold"]
-        floor_thresh = vd["precision_requirement"]["threshold"]
-        lines.append(
-            f"| **{model}** | {vm['default_0_50']['pr_auc']:.4f} | {vm['default_0_50']['roc_auc']:.4f} | "
-            f"{vm['default_0_50']['brier_score']:.4f} | {vm['default_0_50']['ece']:.4f} | "
-            f"{f1_thresh:.4f} | {vm['at_best_f1']['f1']:.4f} | "
-            f"{floor_thresh:.4f} | {vm['at_precision_floor']['precision']:.4f} | {vm['at_precision_floor']['recall']:.4f} |"
-        )
-
-    lines.extend([
-        "",
-        "## 3. Held-Out Test Evaluation (Frozen Decisions)",
-        "",
-        "Evaluated once on the held-out test set using frozen validation thresholds:",
-        "",
-        "| Model | Test PR-AUC | Test ROC-AUC | Test Brier | Test ECE | Prec @ F1 Thresh | Recall @ F1 Thresh | Test F1 | Prec @ Floor Thresh | Recall @ Floor Thresh |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
-    ])
-
-    for model in ["Logistic Regression", "XGBoost"]:
-        tm = test_m[model]
-        lines.append(
-            f"| **{model}** | {tm['default_0_50']['pr_auc']:.4f} | {tm['default_0_50']['roc_auc']:.4f} | "
-            f"{tm['default_0_50']['brier_score']:.4f} | {tm['default_0_50']['ece']:.4f} | "
-            f"{tm['at_best_f1']['precision']:.4f} | {tm['at_best_f1']['recall']:.4f} | {tm['at_best_f1']['f1']:.4f} | "
-            f"{tm['at_precision_floor']['precision']:.4f} | {tm['at_precision_floor']['recall']:.4f} |"
-        )
-
-    lines.extend([
-        "",
-        "## 4. Key Observations",
-        "",
-        "1. **Ranking vs. Probability Calibration Trade-off:**",
-        "   - Logistic Regression achieves slightly higher PR-AUC and ROC-AUC on validation, but XGBoost achieves a noticeably better Brier score (0.1247 vs 0.1333).",
-        "   - On the test set, XGBoost outperforms Logistic Regression in PR-AUC (0.4287 vs 0.4132), demonstrating better generalization under winter conditions.",
-        "2. **Severe Precision–Recall Trade-off:**",
-        "   - Achieving high precision (>= 70%) collapses recall drastically (< 6% on validation, < 10% on test).",
-        "   - The majority of delays (> 90%) are missed if an airline insists on 70% certainty.",
-        "3. **Distribution Shift Across Splits:**",
-        "   - Because test-period prevalence is 64% higher than validation (25.8% vs 15.7%), thresholds tuned in September/October produce significantly higher precision on test data, but calibration drifts.",
-        "",
-        "## 5. Artifacts and Plots",
-        "",
-        "- Validation Reliability Diagram: `reports/figures/validation_reliability_diagram.png`",
-        "- Validation PR & ROC Curves: `reports/figures/validation_pr_roc_curves.png`",
-        "- Test Reliability Diagram: `reports/figures/test_reliability_diagram.png`",
-        "- Test PR & ROC Curves: `reports/figures/test_pr_roc_curves.png`",
-        "- Scored test prediction files saved to `artifacts/predictions/`.",
-    ])
-
-    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+def _gap_markdown(report: dict) -> str:
+    lr = report["test_metrics"]["Logistic Regression"]["at_best_f1"]
+    xg = report["test_metrics"]["XGBoost"]["at_best_f1"]
+    floor_feasible = {name: report["validation_decisions"][name]["precision_requirement"]["floor_achieved"] for name in ("Logistic Regression", "XGBoost")}
+    floor_description = "infeasible for both models" if not any(floor_feasible.values()) else ", ".join(f"{name}: {'feasible' if floor_feasible[name] else 'infeasible'}" for name in floor_feasible)
+    lr_val = report["validation_metrics"]["Logistic Regression"]["assessment_selected"]
+    xg_val = report["validation_metrics"]["XGBoost"]["assessment_selected"]
+    lines = ["# Identify the Gap — AML baselines", "", "This analysis uses the frozen Phase 3 models and the Phase 5 metrics from the same feature-table hash. The existing repository had already exposed test results before this rerun; treat these as retrospective evidence, not a new pristine holdout.", "", f"On the Nov–Dec test period, delay prevalence is {report['split_summary']['test_prevalence']:.1%}. Logistic Regression PR-AUC is {lr['pr_auc']:.4f} and XGBoost PR-AUC is {xg['pr_auc']:.4f}; ROC-AUC is {lr['roc_auc']:.4f} and {xg['roc_auc']:.4f}, respectively. These results show limited discrimination, but one year and two models do not establish a performance ceiling.", "", f"On the threshold-selection slice, F1 reference precision/recall is {lr_val['precision']:.1%}/{lr_val['recall']:.1%} for Logistic Regression and {xg_val['precision']:.1%}/{xg_val['recall']:.1%} for XGBoost. On test, the frozen F1 points detect {lr['recall']:.1%} and {xg['recall']:.1%} of delays, with {lr['confusion_matrix']['fp']:,} and {xg['confusion_matrix']['fp']:,} false alerts. The {report['precision_floor']:.0%} precision floor is exploratory; {floor_description} under the minimum recall and alert-count guards. See the [evaluation report](phase5_aml_evaluation.md) for each model's feasibility and test outcomes; an infeasible floor is never presented as achieved.", "", "Calibration is chosen using a later validation slice than the fitting slice, then applied consistently to test probabilities when selected. Seasonal prevalence shifts from validation to test, so probability reliability and alert behavior may change. The supplied weather is retrospective observation data, not archived forecast vintages. Historical outcomes use a conservative availability bound rather than actual release timestamps. These data limits are plausible reasons for errors, not proof that a neural model will improve them.", "", "Phase 4 remains the deep learning phase; rescheduling is outside this AML analysis.", ""]
+    return "\n".join(lines)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Phase 5 AML Evaluation Engine")
-    parser.add_argument("--precision-floor", type=float, default=0.70)
+    parser = argparse.ArgumentParser(description="Evaluate frozen AML baselines")
+    parser.add_argument("--precision-floor", type=float, default=0.35)
     args = parser.parse_args()
-    run_aml_evaluation(precision_floor=args.precision_floor)
+    result = run_aml_evaluation(precision_floor=args.precision_floor)
+    print(json.dumps({"run_id": result["phase3_run_id"], "test_metrics": result["test_metrics"]}, indent=2))
 
 
 if __name__ == "__main__":

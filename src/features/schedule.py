@@ -18,9 +18,6 @@ def add_schedule_features(flights: pd.DataFrame) -> pd.DataFrame:
     df["sched_hour_cos"] = np.cos(2 * np.pi * df["sched_dep_hour"] / 24)
     df["sched_dow_sin"] = np.sin(2 * np.pi * df["sched_day_of_week"] / 7)
     df["sched_dow_cos"] = np.cos(2 * np.pi * df["sched_day_of_week"] / 7)
-    dep = pd.to_numeric(df["sched_dep_minute"], errors="coerce")
-    arr = pd.to_numeric(df["sched_arr_minute"], errors="coerce")
-    df["scheduled_duration_minutes"] = (arr - dep) % (24 * 60)
     df["route"] = df["origin"].astype("string") + "-" + df["dest"].astype("string")
 
     # Published schedules are available before T-60, so same-hour scheduled
@@ -51,6 +48,8 @@ def join_reference_features(
         on="carrier", how="left", validate="many_to_one",
     )
     airport_cols = ["faa", "name", "lat", "lon", "alt", "tz"]
+    if "tzone" in airports.columns:
+        airport_cols.append("tzone")
     for side, key in (("origin", "origin"), ("destination", "dest")):
         renamed = {
             col: (key if col == "faa" else f"{side}_airport_{col}")
@@ -60,6 +59,33 @@ def join_reference_features(
             airports[airport_cols].rename(columns=renamed),
             on=key, how="left", validate="many_to_one",
         )
+    # Arrival clocks are destination-local. Convert both ends to UTC before
+    # calculating scheduled duration; unmatched destination zones stay missing.
+    df["scheduled_duration_minutes"] = float("nan")
+    if {"destination_airport_tzone", "sched_dep_ts", "sched_date", "sched_arr_minute"} <= set(df.columns):
+        dep_utc = pd.to_datetime(df["sched_dep_ts"], errors="coerce").dt.tz_localize(
+            "America/New_York", ambiguous="NaT", nonexistent="NaT"
+        ).dt.tz_convert("UTC")
+        base_arrival = pd.to_datetime(df["sched_date"], errors="coerce").dt.normalize() + pd.to_timedelta(
+            pd.to_numeric(df["sched_arr_minute"], errors="coerce"), unit="m"
+        )
+        for zone, indices in df.groupby("destination_airport_tzone").groups.items():
+            if not isinstance(zone, str) or not zone:
+                continue
+            try:
+                local_arrival = base_arrival.loc[indices].dt.tz_localize(
+                    zone, ambiguous="NaT", nonexistent="NaT"
+                ).dt.tz_convert("UTC")
+                next_day = local_arrival.le(dep_utc.loc[indices])
+                if next_day.any():
+                    next_local = (base_arrival.loc[indices[next_day]] + pd.Timedelta(days=1)).dt.tz_localize(
+                        zone, ambiguous="NaT", nonexistent="NaT"
+                    ).dt.tz_convert("UTC")
+                    local_arrival = local_arrival.where(~next_day, next_local.reindex(local_arrival.index))
+                minutes = (local_arrival - dep_utc.loc[indices]).dt.total_seconds() / 60
+                df.loc[indices, "scheduled_duration_minutes"] = minutes.to_numpy()
+            except (ValueError, TypeError):
+                continue
     if len(df) != before or not df["flight_row_id"].is_unique:
         raise AssertionError("reference joins changed flight row grain")
     coverage = {

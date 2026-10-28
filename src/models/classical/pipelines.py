@@ -48,7 +48,7 @@ def build_xgboost_pipeline(
         "tree_method": "hist",
         "device": "cpu",
         "random_state": seed,
-        "n_jobs": -1,
+        "n_jobs": 1,
         **settings,
     }
     return Pipeline([

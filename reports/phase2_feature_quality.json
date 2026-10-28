@@ -2,7 +2,7 @@
   "phase": 2,
   "rows": 327346,
   "features": 37,
-  "feature_manifest_sha256": "128b495da34cd52ecf14f83ddaa497e18b64999e11a87b5f020584aefac51d00",
+  "feature_manifest_sha256": "bf461f00978c9369de36b1847a1bf1ac9a248fa5f12664b4e582ac26c87d3e3b",
   "reference_coverage": {
     "rows": 327346,
     "unmatched_airline_rows": 0,
@@ -15,8 +15,8 @@
     "stale_or_missing_rows": 776
   },
   "history": {
-    "carrier_missing_rows": 834,
-    "route_missing_rows": 894
+    "carrier_missing_rows": 928,
+    "route_missing_rows": 1280
   },
-  "output": "/Users/utkarshshekhar/Desktop/flight-delay-prediction/flight-delay-prediction/data/processed/phase2_features.csv"
+  "output": "/Users/aarushgupta/Desktop/Flight Delay Prediction/data/processed/phase2_features.csv"
 }
