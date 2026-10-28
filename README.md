@@ -176,6 +176,17 @@ the split manifest, metadata, and validation prediction files under
 `artifacts/classical/`. Test labels are deliberately not scored in Phase 3;
 Phase 5 owns the final held-out evaluation.
 
+### Read-only analysis notebooks
+
+Start JupyterLab from the repository root with `jupyter lab`. Open
+`notebooks/01_data_and_feature_audit.ipynb` to inspect the Phase 1–2 data,
+target, feature coverage, and T−60 weather checks. Open
+`notebooks/02_aml_validation_and_gap.ipynb` for Phase 3 validation curves,
+calibration diagnostics, and a preliminary evidence-based gap discussion.
+These notebooks read generated artifacts; run the commands above first.
+They do not replace the tested Python pipelines or perform final Phase 5
+test evaluation. Phase 4 remains the deep learning phase.
+
 ## 12. Project documentation
 
 - [Product Requirements Document](docs/Product/PRD.md)
