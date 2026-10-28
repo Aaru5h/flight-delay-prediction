@@ -85,3 +85,51 @@ def test_reference_joins_preserve_unmatched_rows_and_block_duplicate_keys():
     assert coverage["unmatched_airline_rows"] == 1
     with pytest.raises(ValueError, match="not unique"):
         join_reference_features(flights, pd.concat([airlines, airlines]), airports)
+
+
+def test_historical_timing_excludes_arrivals_after_cutoff():
+    """Verify that prior-date flights landing AFTER target T-60 cutoff are excluded."""
+    # Flight 1: Jan 1 departing 10:00 local, scheduled to arrive 12:00 local, 0 delay (actual arr Jan 1 12:00)
+    # Flight 2: Jan 1 departing 23:00 local, scheduled to arrive Jan 2 02:00, 240m delay -> lands Jan 2 06:00!
+    # Target 3: Jan 2 departing 05:00 local -> cutoff is Jan 2 04:00 local!
+    # At Jan 2 04:00, Flight 1 had arrived (12:00 Jan 1 <= 04:00 Jan 2) -> INCLUDED
+    # Flight 2 does NOT arrive until 06:00 Jan 2 (> 04:00 Jan 2) -> EXCLUDED!
+    flights = pd.DataFrame([
+        {
+            "flight_row_id": "f1",
+            "sched_date": pd.Timestamp("2013-01-01"),
+            "sched_dep_ts": pd.Timestamp("2013-01-01 10:00:00"),
+            "sched_arr_ts": pd.Timestamp("2013-01-01 12:00:00"),
+            "arr_delay": 0.0,
+            "carrier": "AA",
+            "origin": "EWR",
+            "dest": "ORD",
+            "substantial_delay": 0,
+        },
+        {
+            "flight_row_id": "f2",
+            "sched_date": pd.Timestamp("2013-01-01"),
+            "sched_dep_ts": pd.Timestamp("2013-01-01 23:00:00"),
+            "sched_arr_ts": pd.Timestamp("2013-01-02 02:00:00"),
+            "arr_delay": 240.0,  # Lands Jan 2 at 06:00!
+            "carrier": "AA",
+            "origin": "EWR",
+            "dest": "SFO",
+            "substantial_delay": 1,
+        },
+        {
+            "flight_row_id": "target",
+            "sched_date": pd.Timestamp("2013-01-02"),
+            "sched_dep_ts": pd.Timestamp("2013-01-02 05:00:00"),  # Cutoff is 04:00
+            "sched_arr_ts": pd.Timestamp("2013-01-02 08:00:00"),
+            "arr_delay": 0.0,
+            "carrier": "AA",
+            "origin": "EWR",
+            "dest": "ORD",
+            "substantial_delay": 0,
+        },
+    ])
+    out = add_historical_features(flights).set_index("flight_row_id")
+    # For target flight, carrier prior count should only be 1 (Flight 1), NOT 2!
+    assert out.loc["target", "carrier_prior_count"] == 1
+    assert out.loc["target", "carrier_delay_rate"] is not pd.NA

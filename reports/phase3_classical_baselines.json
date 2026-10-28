@@ -1,7 +1,7 @@
 {
   "phase": 3,
-  "run_id": "phase3-e4e2a5ce471a",
-  "generated_at": "2026-10-22T19:28:39+00:00",
+  "run_id": "phase3-2e8b0f36f940",
+  "generated_at": "2026-10-28T05:49:29+00:00",
   "test_policy": "test labels not used for fitting, tuning, or Phase 3 metrics; Phase 5 owns final test evaluation",
   "rows": {
     "train": 217727,
@@ -104,7 +104,7 @@
   "random_seed": 42,
   "feature_manifest_version": "2.0.0",
   "feature_manifest_sha256": "128b495da34cd52ecf14f83ddaa497e18b64999e11a87b5f020584aefac51d00",
-  "feature_table_sha256": "7b9b7633beaedf8f6631c49dedfdc85be087bc90515c3d580d592a23ac603edd",
+  "feature_table_sha256": "3db468f5eb530f3a9865a45ceed75acfae5ac467188406e73bdc3aeb54e4a519",
   "split_manifest_version": "1.0.0",
   "split_contract": {
     "type": "chronological",
@@ -119,7 +119,7 @@
     "distribution_shift_note": "Labelled positive prevalence is 26.4% (train), 15.7% (validation) and 25.8% (test); September (13.7%) and December (33.5%) are the seasonal trough/peak. Boundaries were kept as proposed because changing them to balance prevalence would be outcome-driven; the shift must be disclosed in every evaluation report and prevalence reported alongside all metrics.\n",
     "change_policy": "Any boundary change must be documented with rationale in this file before model comparison begins, and never after viewing final test results.\n"
   },
-  "code_commit": "246e9d6812bd7790bbfc526e734040af909022ee",
+  "code_commit": "e09ac744e310bd80c5e4a2c52ffbdc8714493557",
   "models": {
     "logistic_regression": {
       "settings": {
@@ -131,25 +131,25 @@
         "class_weight": null
       },
       "validation_metrics": {
-        "pr_auc": 0.3188634089414798,
-        "roc_auc": 0.6815184272499235,
-        "brier_score": 0.13328706046608418
+        "pr_auc": 0.3188625278905313,
+        "roc_auc": 0.6815179558947709,
+        "brier_score": 0.1332879369890279
       }
     },
     "xgboost": {
       "selected_settings": {
-        "n_estimators": 350,
-        "max_depth": 6,
-        "learning_rate": 0.05,
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.08,
         "subsample": 0.9,
         "colsample_bytree": 0.9,
         "min_child_weight": 5
       },
       "selection_metric": "validation PR AUC",
       "validation_metrics": {
-        "pr_auc": 0.29450617103022136,
-        "roc_auc": 0.6744518146290504,
-        "brier_score": 0.12467139959335327
+        "pr_auc": 0.29958180160647163,
+        "roc_auc": 0.6713920444047228,
+        "brier_score": 0.12467697262763977
       },
       "trials": [
         {
@@ -163,9 +163,9 @@
             "min_child_weight": 5
           },
           "validation_metrics": {
-            "pr_auc": 0.2921401152599052,
-            "roc_auc": 0.6649052389188513,
-            "brier_score": 0.12504497170448303
+            "pr_auc": 0.29958180160647163,
+            "roc_auc": 0.6713920444047228,
+            "brier_score": 0.12467697262763977
           }
         },
         {
@@ -179,9 +179,9 @@
             "min_child_weight": 5
           },
           "validation_metrics": {
-            "pr_auc": 0.29450617103022136,
-            "roc_auc": 0.6744518146290504,
-            "brier_score": 0.12467139959335327
+            "pr_auc": 0.2961545322195722,
+            "roc_auc": 0.675723081456127,
+            "brier_score": 0.1243562176823616
           }
         }
       ]
