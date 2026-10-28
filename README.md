@@ -176,16 +176,27 @@ the split manifest, metadata, and validation prediction files under
 `artifacts/classical/`. Test labels are deliberately not scored in Phase 3;
 Phase 5 owns the final held-out evaluation.
 
+### AML evaluation and calibration (Phase 5)
+
+Run the full Phase 5 evaluation across validation threshold selection, probability calibration diagnostics, and held-out test scoring:
+
+```bash
+python -m src.evaluation.evaluate_aml
+```
+
+This freezes the validation-tuned decision thresholds, generates reliability diagrams and PR/ROC curves under `reports/figures/`, exports scored test predictions to `artifacts/predictions/`, and produces:
+- Full evaluation benchmark: [reports/phase5_aml_evaluation.md](reports/phase5_aml_evaluation.md)
+- In-depth gap analysis: [reports/identify_the_gap.md](reports/identify_the_gap.md)
+
 ### Read-only analysis notebooks
 
 Start JupyterLab from the repository root with `jupyter lab`. Open
 `notebooks/01_data_and_feature_audit.ipynb` to inspect the Phase 1–2 data,
 target, feature coverage, and T−60 weather checks. Open
 `notebooks/02_aml_validation_and_gap.ipynb` for Phase 3 validation curves,
-calibration diagnostics, and a preliminary evidence-based gap discussion.
+calibration diagnostics, and the final evidence-based gap discussion.
 These notebooks read generated artifacts; run the commands above first.
-They do not replace the tested Python pipelines or perform final Phase 5
-test evaluation. Phase 4 remains the deep learning phase.
+Phase 4 remains the deep learning phase.
 
 ## 12. Project documentation
 
