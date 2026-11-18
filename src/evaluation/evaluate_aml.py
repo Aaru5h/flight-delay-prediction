@@ -19,7 +19,7 @@ import pandas as pd
 from sklearn.metrics import brier_score_loss
 
 from src.data import config as data_config
-from src.evaluation.calibration import fit_probability_calibrator, plot_pr_and_roc_curves, plot_reliability_diagrams
+from src.evaluation.calibration import calibration_improves, fit_probability_calibrator, plot_pr_and_roc_curves, plot_reliability_diagrams
 from src.evaluation.metrics import evaluate_predictions
 from src.evaluation.threshold import select_operating_thresholds
 from src.models.classical.train import assign_split
@@ -121,7 +121,7 @@ def run_aml_evaluation(
         raw_brier = float(brier_score_loss(y_val[assess], raw[assess]))
         calibrated_brier = float(brier_score_loss(y_val[assess], calibrated))
         # A meaningful improvement on a separate validation slice is required.
-        use_calibrated = calibrated_brier < raw_brier - 0.001
+        use_calibrated = calibration_improves(raw_brier, calibrated_brier)
         chosen = calibrated if use_calibrated else raw[assess]
         decision = select_operating_thresholds(y_val[assess], chosen, precision_floor=precision_floor)
         selected_val[name] = (y_val[assess], chosen)

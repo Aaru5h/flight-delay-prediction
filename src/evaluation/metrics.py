@@ -15,9 +15,16 @@ from sklearn.metrics import (
 
 
 def compute_ece(
-    y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10
+    y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10,
+    strategy: str = "uniform",
 ) -> float:
-    """Compute Expected Calibration Error with equal-width probability bins."""
+    """Compute ECE; legacy runs use equal widths, v2 supports equal mass."""
+    if strategy == "quantile":
+        from src.evaluation.metrics_v2 import reliability_bins
+        bins = reliability_bins(y_true, y_prob, n_bins)
+        return float(sum(b["count"] * abs(b["mean_probability"] - b["observed_fraction"]) for b in bins) / len(y_true))
+    if strategy != "uniform" or n_bins < 1:
+        raise ValueError("Expected a positive bin count and uniform or quantile strategy")
     bins = np.linspace(0.0, 1.0, n_bins + 1)
     bin_indices = np.digitize(y_prob, bins) - 1
     bin_indices = np.clip(bin_indices, 0, n_bins - 1)

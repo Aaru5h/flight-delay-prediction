@@ -1,5 +1,6 @@
 {
   "version": "1.0.0",
+  "parallel_trials": 4,
   "inner_holdout_days": 14,
   "logistic_regression": {
     "solver": "saga",

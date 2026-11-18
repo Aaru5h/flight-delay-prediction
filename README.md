@@ -5,6 +5,19 @@
 **Dataset:** NYC-origin flight records and associated airline, airport, aircraft, and weather CSV files for 2013  
 **Primary task:** Predict whether a flight will arrive at least 15 minutes late, using information available before departure
 
+**Current milestone:** protocol v2, Steps 1-9. See [project status](PROJECT_STATUS.md)
+for implementation versus completed-experiment status and [Steps 8-9](docs/Engineering/step-8-9-evaluation-handoff.md)
+for calibration and evaluation. The legacy AML commands and results below are
+retained as the original baseline.
+
+**Measured supplied-run results:** calibration and evaluation are complete for
+the five models in the teammate archive, each trained with one configuration.
+Read [the numerical summary](reports/supplied_run/RESULTS.md),
+[all 20 model/lead results](reports/supplied_run/numerical_results.csv), and
+[the complete evaluation JSON](reports/supplied_run/evaluation.json).
+These are reduced-budget retrospective results; the 40-configuration search
+and missing legacy-feature model grid are not claimed complete.
+
 ---
 
 ## 1. Overview
@@ -129,7 +142,7 @@ python3.13 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pytest          # baseline contract tests must pass
+python -m src.checks      # complete suite, with neural/classical process isolation
 ```
 
 ### Data preparation (Phase 1)
@@ -197,7 +210,31 @@ target, feature coverage, and T−60 weather checks. Open
 `notebooks/02_aml_validation_and_gap.ipynb` for Phase 3 validation curves,
 calibration diagnostics, and the final evidence-based gap discussion.
 These notebooks read generated artifacts; run the commands above first.
-Phase 4 remains the deep learning phase.
+The original Phase 4 corresponds to the neural work now implemented as v2 Steps 6-7.
+
+### Protocol v2: complete through Step 9
+
+Run the four-lead dataset build, matched legacy/new classical and neural
+searches, sequence gate, frozen calibration, and retrospective evaluation:
+
+```bash
+python -m src.run_v2
+```
+
+The default is the full 40-configuration budget per model/feature set over all
+six walk-forward folds. Stage logs and resumable state are written under
+`artifacts/v2/`; shareable metrics, diagnostics, subgroup tables and figures
+are published under `reports/v2/` after Step 9 succeeds. A reduced integration
+run can use `--output-root artifacts/v2-development --trial-limit 1`; its
+outputs are marked development only.
+
+Unlike legacy AML, v2 scores at 24 h, 6 h, 2 h and 1 h, updates rolling histories
+only when events are available, and uses monthly walk-forward folds. Weather
+sequences are enabled. Same-day departure inputs remain disabled pending the
+instructor approval required by the protocol. November-December 2013 remains
+retrospective. See [the v2 contract](configs/project_contract_v2.yaml) for the
+active rules and [the progress tracker](PROJECT_STATUS.md) for the boundary
+between completed implementation and full experimental results.
 
 ## 12. Project documentation
 

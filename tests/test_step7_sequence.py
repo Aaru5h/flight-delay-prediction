@@ -1,6 +1,7 @@
 """Step 7 sequence gate, leakage guards and the GRU sequence model."""
 
 import json
+import gzip
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,20 @@ def _load(tmp_path, departures=False):
     features, _, _, _ = read_v2_features(dataset, protocol)
     raw, checks = load_sequences(dataset, manifest, features.frame)
     return dataset, protocol, manifest, features, raw, checks
+
+
+def test_duplicate_sequence_record_blocks_the_gate(tmp_path):
+    dataset, protocol, manifest = write_step4_fixture(tmp_path, sequences=True)
+    features, _, _, _ = read_v2_features(dataset, protocol)
+    path = dataset / "sequences_60m.jsonl.gz"
+    with gzip.open(path, "rt") as stream:
+        duplicate = stream.readline()
+    with gzip.open(path, "at") as stream:
+        stream.write(duplicate)
+    _, checks = load_sequences(dataset, manifest, features.frame)
+    assert checks.structure_errors == 1
+    gate = gate_decision(checks, mlp_check=PASSING_MLP, leakage_tests_passed=True, departures_enabled=False)
+    assert gate["decision"] == "no-go"
 
 
 @pytest.mark.parametrize("departures", [False, True])

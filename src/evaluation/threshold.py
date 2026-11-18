@@ -31,7 +31,8 @@ def select_operating_thresholds(
     if not len(thresholds):
         raise ValueError("no candidate thresholds")
     precision, recall = precision[:-1], recall[:-1]
-    alerts = np.rint(recall * y.sum() / np.maximum(precision, 1e-12)).astype(int)
+    # Count selected flights directly, including score ties and zero true positives.
+    alerts = len(p) - np.searchsorted(np.sort(p), thresholds, side="left")
     feasible = np.flatnonzero((precision >= precision_floor) & (recall >= min_recall) & (alerts >= min_alerts))
     floor_idx = max(feasible, key=lambda i: (recall[i], precision[i], thresholds[i])) if len(feasible) else None
     f1 = np.divide(2 * precision * recall, precision + recall, out=np.zeros_like(precision), where=(precision + recall) > 0)

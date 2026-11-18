@@ -11,6 +11,13 @@ from sklearn.calibration import calibration_curve
 from sklearn.isotonic import IsotonicRegression
 
 
+def calibration_improves(raw_brier: float, calibrated_brier: float, minimum_improvement: float = 0.001) -> bool:
+    """Keep calibration only for a strictly larger held-out Brier improvement."""
+    if not np.isfinite([raw_brier, calibrated_brier, minimum_improvement]).all() or minimum_improvement < 0:
+        raise ValueError("Calibration scores and improvement must be finite and valid")
+    return bool(calibrated_brier < raw_brier - minimum_improvement)
+
+
 def fit_probability_calibrator(
     y_val: np.ndarray, y_val_prob: np.ndarray
 ) -> IsotonicRegression:

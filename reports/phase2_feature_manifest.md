@@ -1,10 +1,10 @@
-# Phase 2 — Feature manifest
+# Phase 2 - Feature manifest
 
-Canonical manifest: `data/processed/phase2_feature_manifest.json` (version 2.2.0; SHA-256 `bf461f00978c9369de36b1847a1bf1ac9a248fa5f12664b4e582ac26c87d3e3b`).
+Canonical manifest: `data/processed/phase2_feature_manifest.json` (version 2.3.0; SHA-256 `b006b5292bee6c2e8d45b6081607556190c34fac5e18fe2a6bcb9019e412def4`).
 
-37 estimator inputs. Audit fields and the target are outside the model allowlist.
+37 estimator inputs. Audit fields and the target are outside the allowlist.
 
-| Feature | Type | Source | T−60 availability rule |
+| Feature | Type | Source | Availability rule |
 |---|---|---|---|
 | `carrier` | categorical | published flight schedule | known by T-60 |
 | `origin` | categorical | published flight schedule | known by T-60 |
@@ -15,8 +15,8 @@ Canonical manifest: `data/processed/phase2_feature_manifest.json` (version 2.2.0
 | `sched_day_of_week` | numeric | published flight schedule | known by T-60 |
 | `sched_month` | numeric | published flight schedule | known by T-60 |
 | `sched_day_of_year` | numeric | published flight schedule | known by T-60 |
-| `sched_hour_sin` | numeric | published flight schedule | known by T-60 |
-| `sched_hour_cos` | numeric | published flight schedule | known by T-60 |
+| `sched_hour_sin` | numeric | published flight schedule | minute-of-day cyclic encoding known by T-60 |
+| `sched_hour_cos` | numeric | published flight schedule | minute-of-day cyclic encoding known by T-60 |
 | `sched_dow_sin` | numeric | published flight schedule | known by T-60 |
 | `sched_dow_cos` | numeric | published flight schedule | known by T-60 |
 | `scheduled_duration_minutes` | numeric | published schedule + destination airport timezone | convert scheduled New York departure and destination-local scheduled arrival to UTC; known by T-60 |

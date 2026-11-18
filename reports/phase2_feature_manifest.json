@@ -1,28 +1,28 @@
 {
+  "manifest_version": "2.3.0",
+  "prediction_time": "T-60",
   "allowlist": [
     "carrier",
     "origin",
     "dest",
-    "sched_dep_hour",
-    "sched_dep_minute_of_day",
-    "sched_dep_dayofweek",
-    "sched_dep_day",
-    "sched_dep_month",
-    "is_weekend",
-    "sin_hour",
-    "cos_hour",
-    "sin_dayofweek",
-    "cos_dayofweek",
-    "sin_month",
-    "cos_month",
+    "route",
     "distance",
-    "sched_flight_duration",
-    "origin_hourly_flight_volume",
-    "dest_lat",
-    "dest_lon",
-    "dest_alt",
-    "dest_tz",
-    "dest_unmatched",
+    "sched_dep_hour",
+    "sched_day_of_week",
+    "sched_month",
+    "sched_day_of_year",
+    "sched_hour_sin",
+    "sched_hour_cos",
+    "sched_dow_sin",
+    "sched_dow_cos",
+    "scheduled_duration_minutes",
+    "origin_scheduled_hour_volume",
+    "origin_airport_lat",
+    "origin_airport_lon",
+    "origin_airport_alt",
+    "destination_airport_lat",
+    "destination_airport_lon",
+    "destination_airport_alt",
     "temp",
     "dewp",
     "humid",
@@ -32,17 +32,13 @@
     "precip",
     "pressure",
     "visib",
-    "weather_age_minutes",
-    "weather_missing_or_stale",
-    "carrier_prior_delay_rate",
+    "weather_stale_or_missing",
     "carrier_prior_count",
-    "has_prior_carrier_history",
-    "route_prior_delay_rate",
+    "carrier_delay_rate",
+    "carrier_history_missing",
     "route_prior_count",
-    "has_prior_route_history",
-    "origin_prior_delay_rate",
-    "origin_prior_count",
-    "has_prior_origin_history"
+    "route_delay_rate",
+    "route_history_missing"
   ],
   "denylist": [
     "dep_time",
@@ -52,315 +48,314 @@
     "air_time",
     "tailnum"
   ],
-  "outside_estimator_columns": [
-    "flight_row_id",
-    "substantial_delay",
-    "label_status",
-    "sched_date",
-    "sched_dep_ts",
-    "sched_arr_ts"
-  ],
-  "features": {
-    "carrier": {
-      "source": "flights.carrier",
-      "availability": "Published airline schedule at ticket purchase (T-days)",
+  "features": [
+    {
+      "name": "carrier",
       "type": "categorical",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "origin": {
-      "source": "flights.origin",
-      "availability": "Published departure airport (EWR/JFK/LGA)",
+    {
+      "name": "origin",
       "type": "categorical",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "dest": {
-      "source": "flights.dest",
-      "availability": "Published destination airport code",
+    {
+      "name": "dest",
       "type": "categorical",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sched_dep_hour": {
-      "source": "flights.sched_dep_time",
-      "availability": "Scheduled departure time (T-60)",
-      "type": "integer",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "route",
+      "type": "categorical",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sched_dep_minute_of_day": {
-      "source": "flights.sched_dep_minute",
-      "availability": "Minutes since midnight for scheduled departure",
-      "type": "integer",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "distance",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sched_dep_dayofweek": {
-      "source": "flights.sched_date",
-      "availability": "Calendar day of week (0=Mon, 6=Sun)",
-      "type": "integer",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_dep_hour",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sched_dep_day": {
-      "source": "flights.sched_date",
-      "availability": "Day of month (1-31)",
-      "type": "integer",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_day_of_week",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sched_dep_month": {
-      "source": "flights.sched_date",
-      "availability": "Month of year (1-12)",
-      "type": "integer",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_month",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "is_weekend": {
-      "source": "flights.sched_date",
-      "availability": "Weekend indicator (Saturday or Sunday)",
-      "type": "binary",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_day_of_year",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sin_hour": {
-      "source": "computed",
-      "availability": "Cyclical transformation of sched_dep_hour",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_hour_sin",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "minute-of-day cyclic encoding known by T-60",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "cos_hour": {
-      "source": "computed",
-      "availability": "Cyclical transformation of sched_dep_hour",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_hour_cos",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "minute-of-day cyclic encoding known by T-60",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "sin_dayofweek": {
-      "source": "computed",
-      "availability": "Cyclical transformation of day of week",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_dow_sin",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "cos_dayofweek": {
-      "source": "computed",
-      "availability": "Cyclical transformation of day of week",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "sched_dow_cos",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "sin_month": {
-      "source": "computed",
-      "availability": "Cyclical transformation of month",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "scheduled_duration_minutes",
+      "type": "numeric",
+      "source": "published schedule + destination airport timezone",
+      "availability_rule": "convert scheduled New York departure and destination-local scheduled arrival to UTC; known by T-60",
+      "missing_value_policy": "unmatched destination timezone stays missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "cos_month": {
-      "source": "computed",
-      "availability": "Cyclical transformation of month",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "origin_scheduled_hour_volume",
+      "type": "numeric",
+      "source": "published flight schedule",
+      "availability_rule": "known by T-60",
+      "missing_value_policy": "unknown category or training-only imputation",
+      "status": "approved"
     },
-    "distance": {
-      "source": "flights.distance",
-      "availability": "Scheduled flight distance in miles",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "origin_airport_lat",
+      "type": "numeric",
+      "source": "airports reference",
+      "availability_rule": "static reference joined by scheduled origin/destination",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "sched_flight_duration": {
-      "source": "flights.sched_dep_ts, sched_arr_ts",
-      "availability": "Scheduled duration in minutes from timetable",
-      "type": "float",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "origin_airport_lon",
+      "type": "numeric",
+      "source": "airports reference",
+      "availability_rule": "static reference joined by scheduled origin/destination",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "origin_hourly_flight_volume": {
-      "source": "flights.origin, sched_dep_ts",
-      "availability": "Published timetable departure count for origin airport in same hour",
-      "type": "integer",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "origin_airport_alt",
+      "type": "numeric",
+      "source": "airports reference",
+      "availability_rule": "static reference joined by scheduled origin/destination",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "dest_lat": {
-      "source": "airports.lat",
-      "availability": "Airport geographic latitude lookup",
-      "type": "float",
-      "missing_policy": "median_imputed_or_indicator",
-      "leakage_status": "approved"
+    {
+      "name": "destination_airport_lat",
+      "type": "numeric",
+      "source": "airports reference",
+      "availability_rule": "static reference joined by scheduled origin/destination",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "dest_lon": {
-      "source": "airports.lon",
-      "availability": "Airport geographic longitude lookup",
-      "type": "float",
-      "missing_policy": "median_imputed_or_indicator",
-      "leakage_status": "approved"
+    {
+      "name": "destination_airport_lon",
+      "type": "numeric",
+      "source": "airports reference",
+      "availability_rule": "static reference joined by scheduled origin/destination",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "dest_alt": {
-      "source": "airports.alt",
-      "availability": "Airport elevation in feet lookup",
-      "type": "float",
-      "missing_policy": "median_imputed_or_indicator",
-      "leakage_status": "approved"
+    {
+      "name": "destination_airport_alt",
+      "type": "numeric",
+      "source": "airports reference",
+      "availability_rule": "static reference joined by scheduled origin/destination",
+      "missing_value_policy": "preserve missing; impute in training-only model pipeline",
+      "status": "approved"
     },
-    "dest_tz": {
-      "source": "airports.tz",
-      "availability": "Airport timezone offset lookup",
-      "type": "float",
-      "missing_policy": "median_imputed_or_indicator",
-      "leakage_status": "approved"
+    {
+      "name": "temp",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "dest_unmatched": {
-      "source": "computed",
-      "availability": "Binary flag for destinations absent from FAA lookup",
-      "type": "binary",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "dewp",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "temp": {
-      "source": "weather.temp",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "humid",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "dewp": {
-      "source": "weather.dewp",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "wind_dir",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "humid": {
-      "source": "weather.humid",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "wind_speed",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "wind_dir": {
-      "source": "weather.wind_dir",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "wind_gust",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "wind_speed": {
-      "source": "weather.wind_speed",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "precip",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "wind_gust": {
-      "source": "weather.wind_gust",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "zero_or_median_imputed",
-      "leakage_status": "approved"
+    {
+      "name": "pressure",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "precip": {
-      "source": "weather.precip",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "zero_imputed",
-      "leakage_status": "approved"
+    {
+      "name": "visib",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "pressure": {
-      "source": "weather.pressure",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "weather_stale_or_missing",
+      "type": "numeric",
+      "source": "weather",
+      "availability_rule": "latest origin observation at/before T-60, maximum age 180 minutes",
+      "missing_value_policy": "numeric missing plus stale/missing indicator",
+      "status": "approved"
     },
-    "visib": {
-      "source": "weather.visib",
-      "availability": "Latest origin weather observation with timestamp <= T-60 (<= 180m old)",
-      "type": "float",
-      "missing_policy": "median_imputed_in_pipeline",
-      "leakage_status": "approved"
+    {
+      "name": "carrier_prior_count",
+      "type": "numeric",
+      "source": "label history",
+      "availability_rule": "training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60",
+      "missing_value_policy": "missing indicator; imputation in training-only model pipeline",
+      "status": "approved"
     },
-    "weather_age_minutes": {
-      "source": "computed",
-      "availability": "Age of origin weather observation at T-60 cutoff",
-      "type": "float",
-      "missing_policy": "median_imputed_or_flag",
-      "leakage_status": "approved"
+    {
+      "name": "carrier_delay_rate",
+      "type": "numeric",
+      "source": "label history",
+      "availability_rule": "training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60",
+      "missing_value_policy": "missing indicator; imputation in training-only model pipeline",
+      "status": "approved"
     },
-    "weather_missing_or_stale": {
-      "source": "computed",
-      "availability": "Indicator if weather was missing or older than 180 minutes",
-      "type": "binary",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "carrier_history_missing",
+      "type": "numeric",
+      "source": "label history",
+      "availability_rule": "training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60",
+      "missing_value_policy": "missing indicator; imputation in training-only model pipeline",
+      "status": "approved"
     },
-    "carrier_prior_delay_rate": {
-      "source": "historical_aggregates",
-      "availability": "Carrier prior delay rate from dates < target_date and actual arrival <= T-60",
-      "type": "float",
-      "missing_policy": "smoothed_with_global_prior",
-      "leakage_status": "approved"
+    {
+      "name": "route_prior_count",
+      "type": "numeric",
+      "source": "label history",
+      "availability_rule": "training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60",
+      "missing_value_policy": "missing indicator; imputation in training-only model pipeline",
+      "status": "approved"
     },
-    "carrier_prior_count": {
-      "source": "historical_aggregates",
-      "availability": "Count of prior flights for carrier available at T-60",
-      "type": "integer",
-      "missing_policy": "zero_when_none",
-      "leakage_status": "approved"
+    {
+      "name": "route_delay_rate",
+      "type": "numeric",
+      "source": "label history",
+      "availability_rule": "training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60",
+      "missing_value_policy": "missing indicator; imputation in training-only model pipeline",
+      "status": "approved"
     },
-    "has_prior_carrier_history": {
-      "source": "computed",
-      "availability": "Flag indicating carrier has >= 5 prior observations",
-      "type": "binary",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
-    },
-    "route_prior_delay_rate": {
-      "source": "historical_aggregates",
-      "availability": "Route prior delay rate from dates < target_date and actual arrival <= T-60",
-      "type": "float",
-      "missing_policy": "smoothed_with_global_prior",
-      "leakage_status": "approved"
-    },
-    "route_prior_count": {
-      "source": "historical_aggregates",
-      "availability": "Count of prior flights for route available at T-60",
-      "type": "integer",
-      "missing_policy": "zero_when_none",
-      "leakage_status": "approved"
-    },
-    "has_prior_route_history": {
-      "source": "computed",
-      "availability": "Flag indicating route has >= 5 prior observations",
-      "type": "binary",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
-    },
-    "origin_prior_delay_rate": {
-      "source": "historical_aggregates",
-      "availability": "Origin prior delay rate from dates < target_date and actual arrival <= T-60",
-      "type": "float",
-      "missing_policy": "smoothed_with_global_prior",
-      "leakage_status": "approved"
-    },
-    "origin_prior_count": {
-      "source": "historical_aggregates",
-      "availability": "Count of prior flights for origin available at T-60",
-      "type": "integer",
-      "missing_policy": "zero_when_none",
-      "leakage_status": "approved"
-    },
-    "has_prior_origin_history": {
-      "source": "computed",
-      "availability": "Flag indicating origin has >= 5 prior observations",
-      "type": "binary",
-      "missing_policy": "never_missing",
-      "leakage_status": "approved"
+    {
+      "name": "route_history_missing",
+      "type": "numeric",
+      "source": "label history",
+      "availability_rule": "training-date outcomes only; earlier calendar dates and conservative availability: scheduled NYC departure + 24 hours + positive arrival delay <= T-60",
+      "missing_value_policy": "missing indicator; imputation in training-only model pipeline",
+      "status": "approved"
     }
-  }
+  ],
+  "audit_only_columns": [
+    "prediction_cutoff_utc",
+    "weather_observed_utc",
+    "weather_age_minutes"
+  ],
+  "limitations": [
+    "Weather values are retrospective observations, not archived forecast vintages.",
+    "Historical rates are frozen to training-date outcomes after 2013-08-31 so validation/test labels never become features.",
+    "Historical arrival availability is conservatively estimated from scheduled NYC departure plus 24 hours and positive arrival delay; no release timestamp is supplied.",
+    "Aircraft/tail-number features are excluded because assignment availability at T-60 is not established."
+  ],
+  "manifest_sha256": "b006b5292bee6c2e8d45b6081607556190c34fac5e18fe2a6bcb9019e412def4"
 }

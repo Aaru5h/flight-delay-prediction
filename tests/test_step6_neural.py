@@ -178,6 +178,11 @@ def test_step6_exports_aligned_predictions_without_reading_sealed_labels(tmp_pat
         assert pred["y_probability"].between(0, 1).all()
         assert not pred.duplicated(["flight_row_id", "lead_time_minutes", "fold_id"]).any()
         assert len(model["trials"]) == 2 and model["reload_check_max_abs_diff"] <= 1e-6
+        history = model["final_fit_diagnostics"]
+        assert len(history["inner_training_loss"]) == history["inner_epochs_run"]
+        assert len(history["inner_holdout_loss"]) == history["inner_epochs_run"]
+        assert len(history["refit_training_loss"]) == history["refit_epochs"]
+        assert np.isfinite(history["inner_holdout_loss"]).all()
         scorer = NeuralScorer(output / model["model_file"])
         sample = frame_60.iloc[:3].copy()
         sample["carrier"] = "unseen"
@@ -200,7 +205,6 @@ def test_step6_refuses_to_overwrite_a_previous_run(tmp_path):
 
 def test_neural_code_never_loads_xgboost_and_keeps_the_step5_helpers():
     """XGBoost next to PyTorch can segfault on Apple-silicon Macs."""
-    import inspect
     import subprocess
     import sys
 
@@ -211,15 +215,21 @@ def test_neural_code_never_loads_xgboost_and_keeps_the_step5_helpers():
     root = Path(__file__).resolve().parents[1]
     assert subprocess.run([sys.executable, "-c", code], cwd=root).returncode == 0
 
-    from src.models.classical import train_step5
-    from src.models.neural import common
-    pairs = [
-        (train_step5._write_json, common.write_json),
-        (train_step5._code_commit, common.code_commit),
-        (train_step5._write_fold_manifest, common.write_fold_manifest),
-        (train_step5._average_precision_by_lead, common.average_precision_by_lead),
-    ]
-    for original, copy in pairs:
-        renamed = inspect.getsource(original).replace(original.__name__, copy.__name__)
-        assert renamed == inspect.getsource(copy), copy.__name__
-    assert train_step5.PREDICTION_COLUMNS == common.PREDICTION_COLUMNS
+    # Compare the helpers in a classical-only child, keeping this process free
+    # of XGBoost before the remaining neural fits execute.
+    check = '''
+import inspect
+from src.models.classical import train_step5
+from src.models.neural import common
+pairs = [
+    (train_step5._write_json, common.write_json),
+    (train_step5._code_commit, common.code_commit),
+    (train_step5._write_fold_manifest, common.write_fold_manifest),
+    (train_step5._average_precision_by_lead, common.average_precision_by_lead),
+]
+for original, copy in pairs:
+    renamed = inspect.getsource(original).replace(original.__name__, copy.__name__)
+    assert renamed == inspect.getsource(copy), copy.__name__
+assert train_step5.PREDICTION_COLUMNS == common.PREDICTION_COLUMNS
+'''
+    assert subprocess.run([sys.executable, "-c", check], cwd=root).returncode == 0

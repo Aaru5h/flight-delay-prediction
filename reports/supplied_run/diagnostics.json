@@ -1,0 +1,223 @@
+{
+  "status": "completed",
+  "fold": "2013-10",
+  "model": "xgboost",
+  "population": "October out-of-fold validation; no retrospective labels",
+  "caveat": "Selected configuration is refit with each group omitted; ablations are not separately retuned. Hyperparameters used the same development folds, so results are diagnostic.",
+  "baseline_average_precision_by_lead": {
+    "60": 0.322405377199374,
+    "120": 0.32860812151998653,
+    "360": 0.35180019713257116,
+    "1440": 0.31414106198561353
+  },
+  "permutation_importance": {
+    "schedule": {
+      "features": [
+        "carrier",
+        "origin",
+        "dest",
+        "route",
+        "sched_dep_hour",
+        "lead_time_minutes",
+        "distance",
+        "sched_hour_sin",
+        "sched_hour_cos",
+        "sched_dow_sin",
+        "sched_dow_cos",
+        "days_to_nearest_holiday",
+        "scheduled_duration_minutes",
+        "origin_scheduled_hour_volume",
+        "origin_airport_lat",
+        "origin_airport_lon",
+        "origin_airport_alt",
+        "destination_airport_lat",
+        "destination_airport_lon",
+        "destination_airport_alt"
+      ],
+      "repeats": [
+        {
+          "60": 0.11205432592654208,
+          "120": 0.12082335655380652,
+          "360": 0.1305922870814647,
+          "1440": 0.1112679060648385
+        },
+        {
+          "60": 0.11404115815551516,
+          "120": 0.1131910081556892,
+          "360": 0.1304821810181958,
+          "1440": 0.11602196905388729
+        },
+        {
+          "60": 0.11423786880717746,
+          "120": 0.1118225116532599,
+          "360": 0.13523473497449487,
+          "1440": 0.11459298284387859
+        }
+      ],
+      "mean_ap_drop_by_lead": {
+        "60": 0.11344445096307824,
+        "120": 0.1152789587875852,
+        "360": 0.13210306769138513,
+        "1440": 0.11396095265420146
+      }
+    },
+    "history": {
+      "features": [
+        "carrier_prior_count_7d",
+        "carrier_delay_rate_7d",
+        "route_prior_count_7d",
+        "route_delay_rate_7d",
+        "origin_prior_count_7d",
+        "origin_delay_rate_7d",
+        "carrier_prior_count_28d",
+        "carrier_delay_rate_28d",
+        "route_prior_count_28d",
+        "route_delay_rate_28d",
+        "origin_prior_count_28d",
+        "origin_delay_rate_28d"
+      ],
+      "repeats": [
+        {
+          "60": 0.023201503632673814,
+          "120": 0.022227307270182906,
+          "360": 0.018059443054380397,
+          "1440": 0.02266430837752481
+        },
+        {
+          "60": 0.021303107906211205,
+          "120": 0.023201886794695814,
+          "360": 0.019060124362001496,
+          "1440": 0.02267312233694818
+        },
+        {
+          "60": 0.021289519670703805,
+          "120": 0.017642377456282998,
+          "360": 0.019315853943798866,
+          "1440": 0.02435923885495711
+        }
+      ],
+      "mean_ap_drop_by_lead": {
+        "60": 0.02193137706986294,
+        "120": 0.021023857173720573,
+        "360": 0.018811807120060253,
+        "1440": 0.023232223189810036
+      }
+    },
+    "weather": {
+      "features": [
+        "temp",
+        "dewp",
+        "humid",
+        "wind_dir",
+        "wind_speed",
+        "wind_gust",
+        "precip",
+        "pressure",
+        "visib",
+        "weather_stale_or_missing",
+        "weather_temp_trend_3h",
+        "weather_humid_trend_3h",
+        "weather_wind_speed_trend_3h",
+        "weather_pressure_trend_3h",
+        "weather_visib_trend_3h",
+        "weather_temp_trend_6h",
+        "weather_humid_trend_6h",
+        "weather_wind_speed_trend_6h",
+        "weather_pressure_trend_6h",
+        "weather_visib_trend_6h"
+      ],
+      "repeats": [
+        {
+          "60": 0.056898378134101146,
+          "120": 0.06817181519748938,
+          "360": 0.0851454126380794,
+          "1440": 0.042752322998293346
+        },
+        {
+          "60": 0.06151151288702322,
+          "120": 0.06375556295760443,
+          "360": 0.08760324437318212,
+          "1440": 0.05142072713402884
+        },
+        {
+          "60": 0.04823015523745999,
+          "120": 0.06390822904973703,
+          "360": 0.08910129879249484,
+          "1440": 0.04722055207441678
+        }
+      ],
+      "mean_ap_drop_by_lead": {
+        "60": 0.05554668208619479,
+        "120": 0.06527853573494362,
+        "360": 0.08728331860125212,
+        "1440": 0.04713120073557966
+      }
+    }
+  },
+  "refit_ablations": {
+    "without_history": {
+      "removed_features": [
+        "carrier_prior_count_7d",
+        "carrier_delay_rate_7d",
+        "route_prior_count_7d",
+        "route_delay_rate_7d",
+        "origin_prior_count_7d",
+        "origin_delay_rate_7d",
+        "carrier_prior_count_28d",
+        "carrier_delay_rate_28d",
+        "route_prior_count_28d",
+        "route_delay_rate_28d",
+        "origin_prior_count_28d",
+        "origin_delay_rate_28d"
+      ],
+      "average_precision_by_lead": {
+        "60": 0.3185728404575427,
+        "120": 0.3280245500376353,
+        "360": 0.35266909241969174,
+        "1440": 0.30300275838902274
+      },
+      "ap_change_vs_full_by_lead": {
+        "60": -0.003832536741831316,
+        "120": -0.0005835714823512195,
+        "360": 0.0008688952871205857,
+        "1440": -0.011138303596590793
+      }
+    },
+    "without_weather": {
+      "removed_features": [
+        "temp",
+        "dewp",
+        "humid",
+        "wind_dir",
+        "wind_speed",
+        "wind_gust",
+        "precip",
+        "pressure",
+        "visib",
+        "weather_stale_or_missing",
+        "weather_temp_trend_3h",
+        "weather_humid_trend_3h",
+        "weather_wind_speed_trend_3h",
+        "weather_pressure_trend_3h",
+        "weather_visib_trend_3h",
+        "weather_temp_trend_6h",
+        "weather_humid_trend_6h",
+        "weather_wind_speed_trend_6h",
+        "weather_pressure_trend_6h",
+        "weather_visib_trend_6h"
+      ],
+      "average_precision_by_lead": {
+        "60": 0.3161105381414765,
+        "120": 0.315101027411755,
+        "360": 0.3129885206425419,
+        "1440": 0.3113545255561121
+      },
+      "ap_change_vs_full_by_lead": {
+        "60": -0.006294839057897517,
+        "120": -0.013507094108231532,
+        "360": -0.03881167649002926,
+        "1440": -0.0027865364295014405
+      }
+    }
+  }
+}

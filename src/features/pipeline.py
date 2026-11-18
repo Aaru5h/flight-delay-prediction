@@ -66,6 +66,17 @@ def build_feature_table(labelled: pd.DataFrame, sources: dict) -> tuple[pd.DataF
     return df, coverage
 
 
+def _manifest_markdown(manifest: dict) -> str:
+    lines = ["# Phase 2 - Feature manifest", "",
+             f"Canonical manifest: `data/processed/phase2_feature_manifest.json` (version {manifest['manifest_version']}; SHA-256 `{manifest['manifest_sha256']}`).", "",
+             f"{len(manifest['allowlist'])} estimator inputs. Audit fields and the target are outside the allowlist.", "",
+             "| Feature | Type | Source | Availability rule |", "|---|---|---|---|"]
+    for feature in manifest["features"]:
+        lines.append(f"| `{feature['name']}` | {feature['type']} | {feature['source']} | {feature['availability_rule']} |")
+    lines += ["", "## Limits", "", *[f"- {item}" for item in manifest["limitations"]], ""]
+    return "\n".join(lines)
+
+
 def run_phase2(raw_dir: Path | None = None, processed_dir: Path | None = None, reports_dir: Path | None = None) -> dict:
     raw_dir = Path(raw_dir or config.RAW_DATA_DIR)
     processed_dir = Path(processed_dir or config.PROCESSED_DATA_DIR)
@@ -84,6 +95,8 @@ def run_phase2(raw_dir: Path | None = None, processed_dir: Path | None = None, r
     output.to_csv(output_path, index=False, date_format="%Y-%m-%dT%H:%M:%SZ")
     manifest = _feature_manifest()
     (processed_dir / "phase2_feature_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (reports_dir / "phase2_feature_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (reports_dir / "phase2_feature_manifest.md").write_text(_manifest_markdown(manifest))
     summary = {"phase": 2, "rows": len(output), "features": len(ALLOWLIST), "feature_manifest_sha256": manifest["manifest_sha256"], "reference_coverage": coverage, "weather": {"matched_observation_rows": int(output["weather_observed_utc"].notna().sum()), "fresh_usable_rows": int((~output["weather_stale_or_missing"]).sum()), "stale_or_missing_rows": int(output["weather_stale_or_missing"].sum())}, "history": {"carrier_missing_rows": int(output["carrier_history_missing"].sum()), "route_missing_rows": int(output["route_history_missing"].sum())}, "output": str(output_path)}
     (reports_dir / "phase2_feature_quality.json").write_text(json.dumps(summary, indent=2) + "\n")
     return summary

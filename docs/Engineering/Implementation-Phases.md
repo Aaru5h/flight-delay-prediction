@@ -5,6 +5,11 @@
 
 This plan is the project-wide roadmap. Each phase has a dedicated implementation plan in this folder. Work should move through the phases in order where dependencies require it; phases may overlap only when the shared data and artifact contracts are already agreed.
 
+**Current milestone:** the audit/DL revision uses Steps 1-10 rather than these
+original Phase 0-7 numbers. The requested implementation ends at Step 9.
+See [PROJECT_STATUS.md](../../PROJECT_STATUS.md) for the active progress map and
+[Step 8-9 handoff](step-8-9-evaluation-handoff.md) for the evaluation deliverable.
+
 ## Phase overview
 
 | Phase | Name | Lead contributor | Main output | Depends on |

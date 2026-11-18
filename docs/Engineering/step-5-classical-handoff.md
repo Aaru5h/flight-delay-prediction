@@ -10,6 +10,12 @@ By default the command reads `data/processed/step4/` and publishes results under
 
 ## Benchmarks and fold rules
 
+Independent candidates run in four threads by default (`parallel_trials` in
+`configs/step5_classical.json`). Prepared feature matrices are shared to avoid
+duplicating the full dataset. Seeds, all 40 configurations, fold order and the
+selection rule are unchanged. Regression tests compare serial and concurrent
+selected parameters, validation scores and predictions to 1e-12 tolerance.
+
 | Benchmark | Inputs and estimator |
 |---|---|
 | Schedule-only | Schedule, calendar, static reference inputs, and lead time from the Step 4 manifest. Logistic Regression with a periodic hour spline. |

@@ -137,6 +137,10 @@ def run_step7(
                 "feature_set": features.name,
                 "feature_manifest_version": features.manifest_version,
                 "feature_file_sha256": features.file_fingerprints,
+                "sequence_file_sha256": {
+                    partition["sequences"]: file_fingerprint(dataset / partition["sequences"])
+                    for partition in manifest["partitions"]
+                },
                 "feature_allowlist": features.allowlist,
                 "sequence_inputs": gate["inputs"],
             }

@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "model_lead_cohorts_recomputed": 20,
+  "comparison_tolerance": 1e-12,
+  "prediction_file_hashes": "passed",
+  "exported_alert_masks": "passed",
+  "frozen_calibration_and_inputs": "passed",
+  "evaluation_sha256": "529317bd999fd32fac80354e597f11c6d2f010c9efe1ab7ba658e71f7ac09093",
+  "verification_code_sha256": "7c2e3d7c25ef3f212713529d73982324be69068779eb52dce2a92b2c2e5cdd92"
+}

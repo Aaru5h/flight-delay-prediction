@@ -132,11 +132,17 @@ def load_sequences(dataset_dir: Path, manifest: dict, frame: pd.DataFrame) -> tu
         if not name or not (Path(dataset_dir) / name).is_file():
             checks.partitions_without_sequences.append(lead)
             continue
+        partition_keys = set()
         with gzip.open(Path(dataset_dir) / name, "rt", encoding="utf-8") as stream:
             for line in stream:
                 record = json.loads(line)
                 key = (str(record[ID]), int(record[LEAD]))
                 checks.records += 1
+                if key in partition_keys:
+                    checks.structure_errors += 1
+                    checks.note(f"{key}: duplicate sequence record")
+                    continue
+                partition_keys.add(key)
                 if key[1] != lead:
                     checks.structure_errors += 1
                     checks.note(f"{key}: record stored in the {lead}-minute file")

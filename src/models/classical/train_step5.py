@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import logging
 from pathlib import Path
 import platform
 import subprocess
+import time
 from tempfile import TemporaryDirectory
 
 import joblib
@@ -121,10 +123,20 @@ def _train_benchmark(
         prepared, evaluation = _fold_data(
             features, metadata, fold, family, settings["inner_holdout_days"], validation=True,
         )
-        for trial in trials:
+        def evaluate_trial(trial):
+            started = time.monotonic()
             model, diagnostics = fit_candidate(family, prepared, model_settings, trial["params"], seed)
             metrics = _average_precision_by_lead(evaluation, _probabilities(model, prepared, evaluation))
             trial["folds"][fold.fold_id] = {"average_precision_by_lead": metrics, **diagnostics}
+            LOGGER.info("%s / %s / %s trial %d/%d: mean AP %.4f (%.1fs)",
+                        features.name, model_name, fold.fold_id, trial["trial"], budget,
+                        float(np.mean(list(metrics.values()))), time.monotonic() - started)
+        # Prepared matrices are read-only during fitting. Threads share them,
+        # avoiding a full dataset copy per candidate on small-memory machines.
+        # Every estimator has its own fixed random_state and fitted state.
+        workers = min(settings.get("parallel_trials", 1), budget)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(evaluate_trial, trials))
         LOGGER.info("%s / %s / %s finished %d trials", features.name, model_name, fold.fold_id, budget)
 
     for trial in trials:
@@ -196,7 +208,7 @@ def run_step5(
     logistic = settings["logistic_regression"]
     booster = settings["xgboost"]
     if min(
-        settings["inner_holdout_days"], logistic["max_iter"], logistic["iterations_per_check"],
+        settings.get("parallel_trials", 1), settings["inner_holdout_days"], logistic["max_iter"], logistic["iterations_per_check"],
         logistic["patience_checks"], booster["max_estimators"], booster["early_stopping_rounds"],
     ) < 1:
         raise ValueError("Training and holdout limits must be positive")

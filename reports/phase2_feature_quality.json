@@ -2,12 +2,23 @@
   "phase": 2,
   "rows": 327346,
   "features": 37,
-  "feature_manifest_sha256": "bf461f00978c9369de36b1847a1bf1ac9a248fa5f12664b4e582ac26c87d3e3b",
+  "feature_manifest_sha256": "b006b5292bee6c2e8d45b6081607556190c34fac5e18fe2a6bcb9019e412def4",
   "reference_coverage": {
     "rows": 327346,
     "unmatched_airline_rows": 0,
     "unmatched_origin_airport_rows": 0,
-    "unmatched_destination_airport_rows": 7537
+    "unmatched_destination_airport_rows": 7537,
+    "schedule_duration": {
+      "eligible_rows": 319809,
+      "missing_destination_timezone_rows": 7537,
+      "localization_failed_rows": 0,
+      "localization_failed_zones": [],
+      "destination_dst_ambiguous_or_nonexistent_rows": 0
+    },
+    "departure_schedule": {
+      "local_missing_or_invalid_rows": 0,
+      "dst_ambiguous_or_nonexistent_rows": 0
+    }
   },
   "weather": {
     "matched_observation_rows": 327346,
@@ -18,5 +29,5 @@
     "carrier_missing_rows": 928,
     "route_missing_rows": 1280
   },
-  "output": "/Users/aarushgupta/Desktop/Flight Delay Prediction/data/processed/phase2_features.csv"
+  "output": "data/processed/phase2_features.csv"
 }

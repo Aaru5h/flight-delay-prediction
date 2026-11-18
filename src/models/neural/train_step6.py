@@ -15,6 +15,7 @@ import json
 import logging
 from pathlib import Path
 import platform
+import time
 from tempfile import TemporaryDirectory
 
 import numpy as np
@@ -174,6 +175,9 @@ def fit_candidate(
         "inner_epochs_run": inner.epochs_run,
         "best_holdout_log_loss": float(min(inner.holdout_losses)),
         "refit_epochs": outer.epochs_run,
+        "inner_training_loss": inner.train_losses,
+        "inner_holdout_loss": inner.holdout_losses,
+        "refit_training_loss": outer.train_losses,
     }
     return outer.model, kwargs, diagnostics
 
@@ -202,11 +206,15 @@ def train_neural_benchmark(
         data = prepare_fold(features, metadata, fold, settings, validation=True, sequences=sequences)
         evaluation_frames[fold.fold_id] = data.evaluation_frame
         for trial in trials:
+            started = time.monotonic()
             model, _, diagnostics = fit_candidate(data, settings, trial["params"], seed, device)
             scores = predict_proba(model, data.evaluation, batch, device)
             metrics = average_precision_by_lead(data.evaluation_frame, scores)
             trial["folds"][fold.fold_id] = {"average_precision_by_lead": metrics, **diagnostics}
             stored[trial["trial"]][fold.fold_id] = scores.astype(np.float32)
+            LOGGER.info("%s / %s / %s trial %d/%d: mean AP %.4f, %d refit epochs (%.1fs)",
+                        features.name, model_name, fold.fold_id, trial["trial"], budget,
+                        float(np.mean(list(metrics.values()))), diagnostics["refit_epochs"], time.monotonic() - started)
         LOGGER.info("%s / %s / %s finished %d trials", features.name, model_name, fold.fold_id, budget)
         # Release this fold's arrays before the next, larger window is built.
         data = None

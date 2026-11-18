@@ -144,6 +144,20 @@ def test_step5_fits_and_exports_both_feature_sets_without_scoring_sealed_labels(
     )
     assert "temp" not in report["feature_sets"]["schedule_only"]["feature_allowlist"]
 
+    # Concurrent candidates must preserve the serial search and predictions.
+    quick_settings["parallel_trials"] = 1
+    config_path.write_text(json.dumps(quick_settings))
+    serial_dir = tmp_path / "serial_artifacts"
+    serial = run_step5(dataset, serial_dir, config_path, legacy_features=legacy,
+                       legacy_manifest=legacy_manifest, trial_limit=2)
+    for feature_set, artifacts in report["feature_sets"].items():
+        for name, model in artifacts["models"].items():
+            same = serial["feature_sets"][feature_set]["models"][name]
+            assert same["selected_params"] == model["selected_params"]
+            assert same["mean_validation_average_precision"] == pytest.approx(model["mean_validation_average_precision"], abs=1e-12)
+            expected = pd.read_csv(serial_dir / same["validation_predictions"])
+            np.testing.assert_allclose(expected.y_probability, predictions[feature_set, name].y_probability, atol=1e-12, rtol=0)
+
 
 def test_real_saga_settings_converge_and_sampling_is_reproducible():
     settings = json.loads(SETTINGS_PATH.read_text())["logistic_regression"]
