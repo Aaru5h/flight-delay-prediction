@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "inner_holdout_days": 14,
+  "logistic_regression": {
+    "solver": "saga",
+    "max_iter": 1000,
+    "tol": 0.001,
+    "iterations_per_check": 50,
+    "patience_checks": 3,
+    "c_log10_range": [-3, 0.5],
+    "class_weights": [null, "balanced"]
+  },
+  "xgboost": {
+    "max_estimators": 500,
+    "early_stopping_rounds": 20,
+    "n_jobs": 2,
+    "max_depth": [3, 8],
+    "learning_rate_log10_range": [-1.7, -0.75],
+    "subsample": [0.65, 1.0],
+    "colsample_bytree": [0.65, 1.0],
+    "min_child_weight_log10_range": [0.0, 1.3],
+    "reg_lambda_log10_range": [-0.5, 1.3]
+  }
+}
