@@ -73,7 +73,7 @@ def _scheduled_duration(flights: pd.DataFrame) -> tuple[pd.Series, dict]:
             arrival_utc = local_schedule_to_utc(local_arrival, timezone)
             overnight = arrival_utc.le(departure)
             if overnight.any():
-                next_local = local_arrival.loc[overnight] + pd.Timedelta(days=1)
+                next_local = local_arrival.loc[overnight] + np.timedelta64(1, "D")
                 next_utc = local_schedule_to_utc(next_local, timezone)
                 arrival_utc = arrival_utc.where(~overnight, next_utc)
         except (ZoneInfoNotFoundError, ValueError, TypeError) as exc:

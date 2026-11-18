@@ -1,5 +1,8 @@
 """Phase 2 leakage, weather, history and join-integrity tests."""
 
+from datetime import timedelta
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
@@ -7,7 +10,7 @@ from src.features.history import add_historical_features
 from src.features.manifest import ALLOWLIST, DENYLIST
 from src.features.pipeline import build_feature_table
 from src.features.schedule import add_schedule_features, join_reference_features
-from src.features.weather import join_weather_asof
+from src.features.weather import WEATHER_INPUTS, join_weather_asof
 
 
 def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", label=0):
@@ -16,7 +19,7 @@ def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", la
         "flight_row_id": row_id,
         "sched_date": pd.Timestamp(date),
         "sched_dep_ts": departure,
-        "actual_arr_utc": departure.tz_localize("America/New_York").tz_convert("UTC") + pd.Timedelta(hours=2),
+        "actual_arr_utc": departure.tz_localize("America/New_York").tz_convert("UTC") + timedelta(hours=2),
         "carrier": carrier,
         "origin": origin,
         "dest": dest,
@@ -202,7 +205,6 @@ def test_validation_labels_do_not_feed_later_validation_features():
 
 
 def test_scheduled_volume_includes_unknown_label_flights():
-    from types import SimpleNamespace
     flights = pd.DataFrame([
         dict(flight_row_id="known", sched_date="2013-01-01", sched_dep_ts="2013-01-01 10:00", sched_arr_ts="2013-01-01 12:00", sched_dep_minute=600, sched_arr_minute=720, carrier="AA", origin="EWR", dest="LAX", distance=2400, arr_delay=0, substantial_delay=0, label_status="known"),
         dict(flight_row_id="unknown", sched_date="2013-01-01", sched_dep_ts="2013-01-01 10:30", sched_arr_ts="2013-01-01 12:30", sched_dep_minute=630, sched_arr_minute=750, carrier="AA", origin="EWR", dest="LAX", distance=2400, arr_delay=None, substantial_delay=None, label_status="unknown"),
@@ -256,3 +258,51 @@ def test_scheduled_duration_reports_failed_zones_and_enforces_the_limit(caplog):
 
     with pytest.raises(ValueError, match="1/2 eligible rows"):
         join_reference_features(flights.iloc[[0, -1]], airlines, airports)
+
+
+def test_feature_pipeline_counts_dst_and_missing_schedules_without_using_history():
+    flights = pd.DataFrame({
+        "flight_row_id": ["prior", "valid", "spring_gap", "fall_overlap", "missing"],
+        "sched_date": ["2013-01-01", "2013-03-10", "2013-03-10", "2013-11-03", "2013-11-03"],
+        "sched_dep_ts": ["2013-01-01 06:00", "2013-03-10 00:30", "2013-03-10 02:30",
+                         "2013-11-03 01:30", None],
+        "sched_dep_minute": [360, 30, 150, 90, None],
+        "sched_arr_minute": [540, 150, 500, 500, 500],
+        "carrier": "AA",
+        "origin": "EWR",
+        "dest": "LAX",
+        "arr_delay": 0,
+        "substantial_delay": 0,
+        "label_status": "known",
+    })
+    weather = pd.DataFrame([
+        {"origin": "EWR", "time_hour": "2013-03-10T04:00:00Z", **dict.fromkeys(WEATHER_INPUTS, 1)},
+    ])
+    airlines = pd.DataFrame({"carrier": ["AA"], "name": ["American"]})
+    airports = pd.DataFrame({
+        "faa": ["EWR", "LAX"], "name": ["Newark", "Los Angeles"],
+        "lat": [40.7, 34.0], "lon": [-74.2, -118.4], "alt": [18, 125], "tz": [-5, -8],
+        "tzone": ["America/New_York", "America/Los_Angeles"],
+    })
+    sources = {
+        name: SimpleNamespace(df=frame)
+        for name, frame in {"airlines": airlines, "airports": airports, "weather": weather}.items()
+    }
+
+    table, coverage = build_feature_table(flights, sources)
+    out = table.set_index("flight_row_id")
+    invalid = out.loc[["spring_gap", "fall_overlap", "missing"]]
+    assert len(out) == len(flights)
+    assert invalid["prediction_cutoff_utc"].isna().all()
+    assert invalid["weather_observed_utc"].isna().all()
+    assert invalid["weather_stale_or_missing"].all()
+    assert invalid["carrier_prior_count"].eq(0).all()
+    assert invalid["route_prior_count"].eq(0).all()
+    assert out.loc["valid", "temp"] == 1
+    assert out.loc["valid", "carrier_prior_count"] == 1
+    assert pd.isna(out.loc["valid", "scheduled_duration_minutes"])
+    assert coverage["schedule_duration"]["destination_dst_ambiguous_or_nonexistent_rows"] == 1
+    assert coverage["departure_schedule"] == {
+        "local_missing_or_invalid_rows": 1,
+        "dst_ambiguous_or_nonexistent_rows": 2,
+    }

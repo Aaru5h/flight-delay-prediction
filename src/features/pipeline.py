@@ -45,12 +45,19 @@ def _feature_manifest() -> dict:
 def build_feature_table(labelled: pd.DataFrame, sources: dict) -> tuple[pd.DataFrame, dict]:
     labelled = labelled.copy()
     labelled["sched_date"] = pd.to_datetime(labelled["sched_date"])
-    labelled["sched_dep_ts"] = pd.to_datetime(labelled["sched_dep_ts"])
+    labelled["sched_dep_ts"] = pd.to_datetime(labelled["sched_dep_ts"], errors="coerce")
     # Scheduled volume must include flights with unknown eventual arrival labels.
     scheduled = add_schedule_features(labelled)
     df = scheduled.loc[scheduled["label_status"].eq("known")].copy()
     df, coverage = join_reference_features(df, sources["airlines"].df, sources["airports"].df)
     df = join_weather_asof(df, sources["weather"].df)
+    missing_departure = df["sched_dep_ts"].isna()
+    coverage["departure_schedule"] = {
+        "local_missing_or_invalid_rows": int(missing_departure.sum()),
+        "dst_ambiguous_or_nonexistent_rows": int(
+            (df["prediction_cutoff_utc"].isna() & ~missing_departure).sum()
+        ),
+    }
     df = add_historical_features(df, history_training_end="2013-08-31")
     if len(df) != labelled["label_status"].eq("known").sum() or not df["flight_row_id"].is_unique:
         raise AssertionError("Phase 2 changed the eligible labelled-flight grain")
