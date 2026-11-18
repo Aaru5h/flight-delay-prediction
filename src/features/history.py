@@ -14,13 +14,15 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
+from src.data.schedule import NYC_TIMEZONE, local_schedule_to_utc
+from src.features.schedule import route_key
+
 
 def _get_prediction_cutoff_utc(df: pd.DataFrame) -> pd.Series:
     if "prediction_cutoff_utc" in df.columns:
         return pd.to_datetime(df["prediction_cutoff_utc"], utc=True)
-    dep_ts = pd.to_datetime(df["sched_dep_ts"], errors="coerce")
-    local = dep_ts.dt.tz_localize("America/New_York", ambiguous="NaT", nonexistent="NaT")
-    return local.dt.tz_convert("UTC") - dt.timedelta(minutes=60)
+    departure_utc = local_schedule_to_utc(df["sched_dep_ts"], NYC_TIMEZONE)
+    return departure_utc - dt.timedelta(minutes=60)
 
 
 def _outcome_available_utc(df: pd.DataFrame) -> pd.Series:
@@ -33,10 +35,7 @@ def _outcome_available_utc(df: pd.DataFrame) -> pd.Series:
     """
     if "actual_arr_utc" in df.columns:
         return pd.to_datetime(df["actual_arr_utc"], utc=True)
-    dep_ts = pd.to_datetime(df["sched_dep_ts"], errors="coerce")
-    dep_utc = dep_ts.dt.tz_localize(
-        "America/New_York", ambiguous="NaT", nonexistent="NaT"
-    ).dt.tz_convert("UTC")
+    dep_utc = local_schedule_to_utc(df["sched_dep_ts"], NYC_TIMEZONE)
     delay = pd.to_numeric(df["arr_delay"], errors="coerce") if "arr_delay" in df else pd.Series(np.nan, index=df.index)
     return (dep_utc + dt.timedelta(hours=24) + pd.to_timedelta(delay.clip(lower=0), unit="m")).where(delay.notna())
 
@@ -96,6 +95,7 @@ def _compute_verified_prior(
 
                 # Binary search: find how many completed arrivals occurred <= target cutoff
                 pos = np.searchsorted(s_arr, cutoffs_sub, side="right")
+                pos[pd.isna(cutoffs_sub)] = 0
                 valid_pos = pos > 0
 
                 cnt = pos.astype(np.int64)
@@ -138,7 +138,7 @@ def add_historical_features(
         df.loc[pd.to_datetime(df["sched_date"]).gt(pd.Timestamp(history_training_end)), "_available_utc"] = pd.NaT
 
     if "route" not in df.columns and "origin" in df.columns and "dest" in df.columns:
-        df["route"] = df["origin"].astype(str) + "_" + df["dest"].astype(str)
+        df["route"] = route_key(df["origin"], df["dest"])
 
     # Carrier rates
     carrier_feats = _compute_verified_prior(

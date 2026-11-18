@@ -9,7 +9,19 @@ normalized.
 
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo
+
 import pandas as pd
+
+NYC_TIMEZONE = "America/New_York"
+
+
+def local_schedule_to_utc(values: pd.Series, timezone: str | ZoneInfo) -> pd.Series:
+    """Convert local schedule timestamps, leaving ambiguous or nonexistent times missing."""
+    local = pd.to_datetime(values, errors="coerce")
+    return local.dt.tz_localize(
+        timezone, ambiguous="NaT", nonexistent="NaT"
+    ).dt.tz_convert("UTC")
 
 
 def add_flight_row_id(flights: pd.DataFrame, fingerprint: str) -> pd.DataFrame:

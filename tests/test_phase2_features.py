@@ -1,13 +1,16 @@
 """Phase 2 leakage, weather, history and join-integrity tests."""
 
+from datetime import timedelta
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
 from src.features.history import add_historical_features
 from src.features.manifest import ALLOWLIST, DENYLIST
 from src.features.pipeline import build_feature_table
-from src.features.schedule import join_reference_features
-from src.features.weather import join_weather_asof
+from src.features.schedule import add_schedule_features, join_reference_features
+from src.features.weather import WEATHER_INPUTS, join_weather_asof
 
 
 def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", label=0):
@@ -16,7 +19,7 @@ def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", la
         "flight_row_id": row_id,
         "sched_date": pd.Timestamp(date),
         "sched_dep_ts": departure,
-        "actual_arr_utc": departure.tz_localize("America/New_York").tz_convert("UTC") + pd.Timedelta(hours=2),
+        "actual_arr_utc": departure.tz_localize("America/New_York").tz_convert("UTC") + timedelta(hours=2),
         "carrier": carrier,
         "origin": origin,
         "dest": dest,
@@ -27,6 +30,29 @@ def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", la
 def test_denylist_and_allowlist_are_disjoint():
     assert not set(DENYLIST) & set(ALLOWLIST)
     assert {"dep_time", "dep_delay", "arr_time", "arr_delay", "air_time", "tailnum"} <= set(DENYLIST)
+
+
+def test_schedule_cycles_resolve_minutes_within_the_hour():
+    flights = pd.DataFrame([
+        {**_flight("early", "2013-01-01", "06:00"), "sched_dep_minute": 360, "sched_arr_minute": 500},
+        {**_flight("late", "2013-01-01", "06:30"), "sched_dep_minute": 390, "sched_arr_minute": 530},
+    ])
+    out = add_schedule_features(flights)
+    assert out["sched_dep_hour"].tolist() == [6, 6]
+    assert out["sched_hour_sin"].tolist() == pytest.approx([1.0, 0.9914448614])
+    assert out["sched_hour_cos"].tolist() == pytest.approx([0.0, -0.1305261922])
+
+
+def test_history_and_schedule_use_the_same_route_key():
+    flights = pd.DataFrame([
+        {**_flight("known", "2013-01-01", "06:00"), "sched_dep_minute": 360, "sched_arr_minute": 500},
+        {**_flight("missing", "2013-01-01", "06:00", dest=None), "sched_dep_minute": 360, "sched_arr_minute": 500},
+    ])
+    schedule_routes = add_schedule_features(flights)["route"]
+    history_routes = add_historical_features(flights)["route"]
+    pd.testing.assert_series_equal(schedule_routes, history_routes)
+    assert schedule_routes.iloc[0] == "EWR-LAX"
+    assert pd.isna(schedule_routes.iloc[1])
 
 
 def test_weather_uses_latest_past_observation_and_rejects_future_and_stale():
@@ -179,7 +205,6 @@ def test_validation_labels_do_not_feed_later_validation_features():
 
 
 def test_scheduled_volume_includes_unknown_label_flights():
-    from types import SimpleNamespace
     flights = pd.DataFrame([
         dict(flight_row_id="known", sched_date="2013-01-01", sched_dep_ts="2013-01-01 10:00", sched_arr_ts="2013-01-01 12:00", sched_dep_minute=600, sched_arr_minute=720, carrier="AA", origin="EWR", dest="LAX", distance=2400, arr_delay=0, substantial_delay=0, label_status="known"),
         dict(flight_row_id="unknown", sched_date="2013-01-01", sched_dep_ts="2013-01-01 10:30", sched_arr_ts="2013-01-01 12:30", sched_dep_minute=630, sched_arr_minute=750, carrier="AA", origin="EWR", dest="LAX", distance=2400, arr_delay=None, substantial_delay=None, label_status="unknown"),
@@ -193,7 +218,6 @@ def test_scheduled_volume_includes_unknown_label_flights():
 
 
 def test_scheduled_duration_uses_destination_timezone():
-    from src.features.schedule import add_schedule_features
     flights = pd.DataFrame([dict(flight_row_id="a", sched_date=pd.Timestamp("2013-01-01"), sched_dep_ts=pd.Timestamp("2013-01-01 05:15"), sched_dep_minute=315, sched_arr_minute=499, carrier="UA", origin="EWR", dest="IAH")])
     airports = pd.DataFrame({"faa": ["EWR", "IAH"], "name": ["Newark", "Houston"], "lat": [40.7, 30.0], "lon": [-74.2, -95.3], "alt": [18, 97], "tz": [-5, -6], "tzone": ["America/New_York", "America/Chicago"]})
     airlines = pd.DataFrame({"carrier": ["UA"], "name": ["United"]})
@@ -205,3 +229,80 @@ def test_scheduled_duration_uses_destination_timezone():
     overnight["sched_arr_minute"] = 30
     next_day, _ = join_reference_features(add_schedule_features(overnight), airlines, airports)
     assert next_day.iloc[0].scheduled_duration_minutes == 150
+
+
+def test_scheduled_duration_reports_failed_zones_and_enforces_the_limit(caplog):
+    flights = pd.DataFrame({
+        "flight_row_id": [f"f{i}" for i in range(1000)],
+        "origin": "EWR",
+        "dest": ["LAX"] * 999 + ["BAD"],
+        "carrier": "AA",
+        "sched_date": pd.Timestamp("2013-01-01"),
+        "sched_dep_ts": pd.Timestamp("2013-01-01 10:00"),
+        "sched_arr_minute": 780,
+    })
+    airlines = pd.DataFrame({"carrier": ["AA"], "name": ["American"]})
+    airports = pd.DataFrame({
+        "faa": ["EWR", "LAX", "BAD"], "name": ["Newark", "Los Angeles", "Invalid"],
+        "lat": [40.7, 34.0, 0], "lon": [-74.2, -118.4, 0], "alt": [18, 125, 0], "tz": [-5, -8, 0],
+        "tzone": ["America/New_York", "America/Los_Angeles", "Invalid/Zone"],
+    })
+
+    out, coverage = join_reference_features(flights, airlines, airports)
+    assert out.iloc[0]["scheduled_duration_minutes"] == 360
+    assert pd.isna(out.iloc[-1]["scheduled_duration_minutes"])
+    audit = coverage["schedule_duration"]
+    assert audit["localization_failed_rows"] == 1
+    assert audit["localization_failed_zones"] == ["Invalid/Zone"]
+    assert "Invalid/Zone on 1 rows" in caplog.text
+
+    with pytest.raises(ValueError, match="1/2 eligible rows"):
+        join_reference_features(flights.iloc[[0, -1]], airlines, airports)
+
+
+def test_feature_pipeline_counts_dst_and_missing_schedules_without_using_history():
+    flights = pd.DataFrame({
+        "flight_row_id": ["prior", "valid", "spring_gap", "fall_overlap", "missing"],
+        "sched_date": ["2013-01-01", "2013-03-10", "2013-03-10", "2013-11-03", "2013-11-03"],
+        "sched_dep_ts": ["2013-01-01 06:00", "2013-03-10 00:30", "2013-03-10 02:30",
+                         "2013-11-03 01:30", None],
+        "sched_dep_minute": [360, 30, 150, 90, None],
+        "sched_arr_minute": [540, 150, 500, 500, 500],
+        "carrier": "AA",
+        "origin": "EWR",
+        "dest": "LAX",
+        "arr_delay": 0,
+        "substantial_delay": 0,
+        "label_status": "known",
+    })
+    weather = pd.DataFrame([
+        {"origin": "EWR", "time_hour": "2013-03-10T04:00:00Z", **dict.fromkeys(WEATHER_INPUTS, 1)},
+    ])
+    airlines = pd.DataFrame({"carrier": ["AA"], "name": ["American"]})
+    airports = pd.DataFrame({
+        "faa": ["EWR", "LAX"], "name": ["Newark", "Los Angeles"],
+        "lat": [40.7, 34.0], "lon": [-74.2, -118.4], "alt": [18, 125], "tz": [-5, -8],
+        "tzone": ["America/New_York", "America/Los_Angeles"],
+    })
+    sources = {
+        name: SimpleNamespace(df=frame)
+        for name, frame in {"airlines": airlines, "airports": airports, "weather": weather}.items()
+    }
+
+    table, coverage = build_feature_table(flights, sources)
+    out = table.set_index("flight_row_id")
+    invalid = out.loc[["spring_gap", "fall_overlap", "missing"]]
+    assert len(out) == len(flights)
+    assert invalid["prediction_cutoff_utc"].isna().all()
+    assert invalid["weather_observed_utc"].isna().all()
+    assert invalid["weather_stale_or_missing"].all()
+    assert invalid["carrier_prior_count"].eq(0).all()
+    assert invalid["route_prior_count"].eq(0).all()
+    assert out.loc["valid", "temp"] == 1
+    assert out.loc["valid", "carrier_prior_count"] == 1
+    assert pd.isna(out.loc["valid", "scheduled_duration_minutes"])
+    assert coverage["schedule_duration"]["destination_dst_ambiguous_or_nonexistent_rows"] == 1
+    assert coverage["departure_schedule"] == {
+        "local_missing_or_invalid_rows": 1,
+        "dst_ambiguous_or_nonexistent_rows": 2,
+    }
