@@ -208,6 +208,7 @@ Phase 4 remains the deep learning phase.
 - [Entity Relationship Diagram](docs/Architecture%20Diagrams/ER-Diagram.md)
 - [UML Class Diagram](docs/Architecture%20Diagrams/UML-Class-Diagram.md)
 - [Project Contract (frozen Phase 0 decisions)](configs/project_contract.yaml)
+- [DL milestone protocol v2](configs/project_contract_v2.yaml)
 - [Implementation Phases](docs/Engineering/Implementation-Phases.md)
 - [Phase 0 Inventory and Environment Report](reports/phase0_repository_inventory.md)
 
