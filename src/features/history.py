@@ -14,6 +14,8 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
+from src.features.schedule import route_key
+
 
 def _get_prediction_cutoff_utc(df: pd.DataFrame) -> pd.Series:
     if "prediction_cutoff_utc" in df.columns:
@@ -138,7 +140,7 @@ def add_historical_features(
         df.loc[pd.to_datetime(df["sched_date"]).gt(pd.Timestamp(history_training_end)), "_available_utc"] = pd.NaT
 
     if "route" not in df.columns and "origin" in df.columns and "dest" in df.columns:
-        df["route"] = df["origin"].astype(str) + "_" + df["dest"].astype(str)
+        df["route"] = route_key(df["origin"], df["dest"])
 
     # Carrier rates
     carrier_feats = _compute_verified_prior(

@@ -6,6 +6,11 @@ import numpy as np
 import pandas as pd
 
 
+def route_key(origin: pd.Series, destination: pd.Series) -> pd.Series:
+    """Return the canonical origin-destination key, preserving missing codes."""
+    return origin.astype("string") + "-" + destination.astype("string")
+
+
 def add_schedule_features(flights: pd.DataFrame) -> pd.DataFrame:
     """Create deterministic features using scheduled information only."""
     df = flights.copy()
@@ -14,11 +19,13 @@ def add_schedule_features(flights: pd.DataFrame) -> pd.DataFrame:
     df["sched_day_of_week"] = ts.dt.dayofweek.astype("Int8")
     df["sched_month"] = ts.dt.month.astype("Int8")
     df["sched_day_of_year"] = ts.dt.dayofyear.astype("Int16")
-    df["sched_hour_sin"] = np.sin(2 * np.pi * df["sched_dep_hour"] / 24)
-    df["sched_hour_cos"] = np.cos(2 * np.pi * df["sched_dep_hour"] / 24)
+    minute_of_day = ts.dt.hour * 60 + ts.dt.minute
+    angle = 2 * np.pi * minute_of_day / (24 * 60)
+    df["sched_hour_sin"] = np.sin(angle)
+    df["sched_hour_cos"] = np.cos(angle)
     df["sched_dow_sin"] = np.sin(2 * np.pi * df["sched_day_of_week"] / 7)
     df["sched_dow_cos"] = np.cos(2 * np.pi * df["sched_day_of_week"] / 7)
-    df["route"] = df["origin"].astype("string") + "-" + df["dest"].astype("string")
+    df["route"] = route_key(df["origin"], df["dest"])
 
     # Published schedules are available before T-60, so same-hour scheduled
     # volume is safe; no realized departure or arrival values are used.

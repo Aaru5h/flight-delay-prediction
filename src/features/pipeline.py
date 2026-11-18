@@ -31,10 +31,12 @@ def _feature_manifest() -> dict:
             source, rule, missing = "airports reference", "static reference joined by scheduled origin/destination", "preserve missing; impute in training-only model pipeline"
         elif name == "scheduled_duration_minutes":
             source, rule, missing = "published schedule + destination airport timezone", "convert scheduled New York departure and destination-local scheduled arrival to UTC; known by T-60", "unmatched destination timezone stays missing; impute in training-only model pipeline"
+        elif name in {"sched_hour_sin", "sched_hour_cos"}:
+            source, rule, missing = "published flight schedule", "minute-of-day cyclic encoding known by T-60", "preserve missing; impute in training-only model pipeline"
         else:
             source, rule, missing = "published flight schedule", "known by T-60", "unknown category or training-only imputation"
         entries.append({"name": name, "type": "categorical" if name in categorical else "numeric", "source": source, "availability_rule": rule, "missing_value_policy": missing, "status": "approved"})
-    payload = {"manifest_version": "2.2.0", "prediction_time": "T-60", "allowlist": ALLOWLIST, "denylist": DENYLIST, "features": entries, "audit_only_columns": ["prediction_cutoff_utc", "weather_observed_utc", "weather_age_minutes"], "limitations": ["Weather values are retrospective observations, not archived forecast vintages.", "Historical rates are frozen to training-date outcomes after 2013-08-31 so validation/test labels never become features.", "Historical arrival availability is conservatively estimated from scheduled NYC departure plus 24 hours and positive arrival delay; no release timestamp is supplied.", "Aircraft/tail-number features are excluded because assignment availability at T-60 is not established."]}
+    payload = {"manifest_version": "2.3.0", "prediction_time": "T-60", "allowlist": ALLOWLIST, "denylist": DENYLIST, "features": entries, "audit_only_columns": ["prediction_cutoff_utc", "weather_observed_utc", "weather_age_minutes"], "limitations": ["Weather values are retrospective observations, not archived forecast vintages.", "Historical rates are frozen to training-date outcomes after 2013-08-31 so validation/test labels never become features.", "Historical arrival availability is conservatively estimated from scheduled NYC departure plus 24 hours and positive arrival delay; no release timestamp is supplied.", "Aircraft/tail-number features are excluded because assignment availability at T-60 is not established."]}
     encoded = json.dumps(payload, sort_keys=True).encode()
     payload["manifest_sha256"] = hashlib.sha256(encoded).hexdigest()
     return payload

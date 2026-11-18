@@ -6,7 +6,7 @@ import pytest
 from src.features.history import add_historical_features
 from src.features.manifest import ALLOWLIST, DENYLIST
 from src.features.pipeline import build_feature_table
-from src.features.schedule import join_reference_features
+from src.features.schedule import add_schedule_features, join_reference_features
 from src.features.weather import join_weather_asof
 
 
@@ -27,6 +27,29 @@ def _flight(row_id, date, local_time, carrier="AA", origin="EWR", dest="LAX", la
 def test_denylist_and_allowlist_are_disjoint():
     assert not set(DENYLIST) & set(ALLOWLIST)
     assert {"dep_time", "dep_delay", "arr_time", "arr_delay", "air_time", "tailnum"} <= set(DENYLIST)
+
+
+def test_schedule_cycles_resolve_minutes_within_the_hour():
+    flights = pd.DataFrame([
+        {**_flight("early", "2013-01-01", "06:00"), "sched_dep_minute": 360, "sched_arr_minute": 500},
+        {**_flight("late", "2013-01-01", "06:30"), "sched_dep_minute": 390, "sched_arr_minute": 530},
+    ])
+    out = add_schedule_features(flights)
+    assert out["sched_dep_hour"].tolist() == [6, 6]
+    assert out["sched_hour_sin"].tolist() == pytest.approx([1.0, 0.9914448614])
+    assert out["sched_hour_cos"].tolist() == pytest.approx([0.0, -0.1305261922])
+
+
+def test_history_and_schedule_use_the_same_route_key():
+    flights = pd.DataFrame([
+        {**_flight("known", "2013-01-01", "06:00"), "sched_dep_minute": 360, "sched_arr_minute": 500},
+        {**_flight("missing", "2013-01-01", "06:00", dest=None), "sched_dep_minute": 360, "sched_arr_minute": 500},
+    ])
+    schedule_routes = add_schedule_features(flights)["route"]
+    history_routes = add_historical_features(flights)["route"]
+    pd.testing.assert_series_equal(schedule_routes, history_routes)
+    assert schedule_routes.iloc[0] == "EWR-LAX"
+    assert pd.isna(schedule_routes.iloc[1])
 
 
 def test_weather_uses_latest_past_observation_and_rejects_future_and_stale():
@@ -193,7 +216,6 @@ def test_scheduled_volume_includes_unknown_label_flights():
 
 
 def test_scheduled_duration_uses_destination_timezone():
-    from src.features.schedule import add_schedule_features
     flights = pd.DataFrame([dict(flight_row_id="a", sched_date=pd.Timestamp("2013-01-01"), sched_dep_ts=pd.Timestamp("2013-01-01 05:15"), sched_dep_minute=315, sched_arr_minute=499, carrier="UA", origin="EWR", dest="IAH")])
     airports = pd.DataFrame({"faa": ["EWR", "IAH"], "name": ["Newark", "Houston"], "lat": [40.7, 30.0], "lon": [-74.2, -95.3], "alt": [18, 97], "tz": [-5, -6], "tzone": ["America/New_York", "America/Chicago"]})
     airlines = pd.DataFrame({"carrier": ["UA"], "name": ["United"]})
