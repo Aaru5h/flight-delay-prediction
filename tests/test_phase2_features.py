@@ -227,3 +227,32 @@ def test_scheduled_duration_uses_destination_timezone():
     overnight["sched_arr_minute"] = 30
     next_day, _ = join_reference_features(add_schedule_features(overnight), airlines, airports)
     assert next_day.iloc[0].scheduled_duration_minutes == 150
+
+
+def test_scheduled_duration_reports_failed_zones_and_enforces_the_limit(caplog):
+    flights = pd.DataFrame({
+        "flight_row_id": [f"f{i}" for i in range(1000)],
+        "origin": "EWR",
+        "dest": ["LAX"] * 999 + ["BAD"],
+        "carrier": "AA",
+        "sched_date": pd.Timestamp("2013-01-01"),
+        "sched_dep_ts": pd.Timestamp("2013-01-01 10:00"),
+        "sched_arr_minute": 780,
+    })
+    airlines = pd.DataFrame({"carrier": ["AA"], "name": ["American"]})
+    airports = pd.DataFrame({
+        "faa": ["EWR", "LAX", "BAD"], "name": ["Newark", "Los Angeles", "Invalid"],
+        "lat": [40.7, 34.0, 0], "lon": [-74.2, -118.4, 0], "alt": [18, 125, 0], "tz": [-5, -8, 0],
+        "tzone": ["America/New_York", "America/Los_Angeles", "Invalid/Zone"],
+    })
+
+    out, coverage = join_reference_features(flights, airlines, airports)
+    assert out.iloc[0]["scheduled_duration_minutes"] == 360
+    assert pd.isna(out.iloc[-1]["scheduled_duration_minutes"])
+    audit = coverage["schedule_duration"]
+    assert audit["localization_failed_rows"] == 1
+    assert audit["localization_failed_zones"] == ["Invalid/Zone"]
+    assert "Invalid/Zone on 1 rows" in caplog.text
+
+    with pytest.raises(ValueError, match="1/2 eligible rows"):
+        join_reference_features(flights.iloc[[0, -1]], airlines, airports)
